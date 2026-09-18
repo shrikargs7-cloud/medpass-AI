@@ -121,16 +121,12 @@ def seed_db():
             policy_id=pol1.id,
             case_number="MED-2026-8842",
             case_status="EVALUATED",
-            readiness_score=85,
-            readiness_band="GREEN",
-            admission_type="EMERGENCY",
-            admission_date=date(2026, 9, 15),
+            readiness_score=85.0,
+            readiness_band="SUBMISSION_READY",
             primary_diagnosis_code="K35.80",
             primary_diagnosis_name="Acute Appendicitis (Unspecified)",
             authorization_status="APPROVED",
-            discharge_status="NOT_READY",
-            preauth_approved_amount=82000.0,
-            quarantined=False
+            discharge_status="NOT_READY"
         )
         c2 = Case(
             patient_id=pat2.id,
@@ -138,16 +134,12 @@ def seed_db():
             policy_id=pol2.id,
             case_number="MED-2026-5091",
             case_status="SUBMITTED",
-            readiness_score=62,
-            readiness_band="AMBER",
-            admission_type="ELECTIVE",
-            admission_date=date(2026, 9, 16),
+            readiness_score=62.0,
+            readiness_band="REVIEW_REQUIRED",
             primary_diagnosis_code="K80.20",
             primary_diagnosis_name="Calculus of Gallbladder without Cholecystitis",
             authorization_status="PENDING",
-            discharge_status="NOT_READY",
-            preauth_approved_amount=0.0,
-            quarantined=False
+            discharge_status="NOT_READY"
         )
         c3 = Case(
             patient_id=pat3.id,
@@ -155,16 +147,12 @@ def seed_db():
             policy_id=pol1.id,
             case_number="MED-2026-1104",
             case_status="DISCHARGE_READY",
-            readiness_score=95,
-            readiness_band="GREEN",
-            admission_type="EMERGENCY",
-            admission_date=date(2026, 9, 12),
+            readiness_score=95.0,
+            readiness_band="SUBMISSION_READY",
             primary_diagnosis_code="J18.9",
             primary_diagnosis_name="Pneumonia, Unspecified Organism",
             authorization_status="APPROVED",
-            discharge_status="READY",
-            preauth_approved_amount=45000.0,
-            quarantined=False
+            discharge_status="READY"
         )
         db.add_all([c1, c2, c3])
         db.flush()
