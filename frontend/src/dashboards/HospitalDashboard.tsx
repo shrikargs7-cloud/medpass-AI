@@ -3,14 +3,15 @@ import {
   Activity, AlertTriangle, CheckCircle2, Clock, UploadCloud,
   FileText, ArrowRight, DollarSign, ShieldAlert, Sparkles, Plus,
   Info, ChevronRight, FileCheck, Trash2, Edit3, X, Shield, RefreshCw, BarChart2,
-  Award, Landmark, Search
+  Award, Landmark, Search, MessageSquare, Send
 } from 'lucide-react';
 import { CaseDetail, ClaimItem } from '../types';
 import {
   fetchCases, fetchCaseDetail, evaluateCase,
   submitCasePreauth, resolveBlocker, uploadDocument, createCase,
   updateCase, deleteCase, addLineItem, updateLineItem, deleteLineItem,
-  addBlocker, deleteBlocker, fetchAvailablePolicies, fetchClaims
+  addBlocker, deleteBlocker, fetchAvailablePolicies, fetchClaims,
+  sendSmsNotification
 } from '../api/client';
 import {
   ReadinessRing,
@@ -94,6 +95,26 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
   const [documentInput, setDocumentInput] = useState('');
   const [uploadingDoc, setUploadingDoc] = useState(false);
   const [notification, setNotification] = useState<string | null>(null);
+
+  // SMS Modal State
+  const [showSmsModal, setShowSmsModal] = useState(false);
+  const [smsPhone, setSmsPhone] = useState('+919845012345');
+  const [smsBody, setSmsBody] = useState('Hospital Update: Your pre-authorization has been submitted to your insurer.');
+  const [smsSending, setSmsSending] = useState(false);
+
+  const handleSendHospitalSms = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSmsSending(true);
+    try {
+      const res = await sendSmsNotification(smsPhone, smsBody);
+      notify(`SMS successfully dispatched to ${smsPhone} (${res.status})`);
+      setShowSmsModal(false);
+    } catch (err: any) {
+      alert(err.message || 'Failed to dispatch SMS');
+    } finally {
+      setSmsSending(false);
+    }
+  };
 
   const loadData = async (targetCaseId?: string) => {
     try {
@@ -429,6 +450,20 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
         </div>
 
         <div className="flex items-center space-x-2">
+          <button
+            onClick={() => {
+              if (selectedCase) {
+                setSmsBody(`Hospital Update [Case #${selectedCase.case_number}]: Pre-auth submitted. Estimated patient payable: ₹${(selectedCase.total_patient_payable || 0).toLocaleString()}.`);
+              }
+              setShowSmsModal(true);
+            }}
+            className="flex items-center px-3.5 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs transition-all cursor-pointer"
+            title="Dispatch SMS alert to patient"
+          >
+            <MessageSquare className="w-3.5 h-3.5 mr-1" />
+            Send Patient SMS
+          </button>
+
           <button
             onClick={() => setShowNewCaseModal(true)}
             className="flex items-center px-3.5 py-1.5 rounded-xl text-xs font-bold bg-teal-600 hover:bg-teal-700 text-white shadow-xs transition-all cursor-pointer"
@@ -1385,6 +1420,97 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
                   className="px-4 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold cursor-pointer"
                 >
                   Add
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 7: Send Patient SMS */}
+      {showSmsModal && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200">
+            <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-100">
+              <div className="flex items-center space-x-2">
+                <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                  <MessageSquare className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Send Patient SMS Notification</h3>
+                  <p className="text-[10px] text-slate-500">Hospital Billing & Coordination Desk</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowSmsModal(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSendHospitalSms} className="space-y-3.5 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Recipient Mobile Number</label>
+                <div className="relative">
+                  <Send className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+                  <input
+                    type="tel"
+                    required
+                    value={smsPhone}
+                    onChange={(e) => setSmsPhone(e.target.value)}
+                    placeholder="+91 98450 12345"
+                    className="w-full pl-8 pr-3 py-2 text-xs rounded-xl border border-slate-200 font-mono bg-slate-50/50"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Quick Notification Templates</label>
+                <div className="space-y-1.5">
+                  {[
+                    `Pre-auth submitted for Case #${selectedCase?.case_number || '2025'}. In review with insurer.`,
+                    `Estimated patient payable: ₹${(selectedCase?.total_patient_payable || 0).toLocaleString()}. Please visit billing desk.`,
+                    `Discharge summary ready. Room rent cap clause 3.2 applied per policy terms.`,
+                    `Cashless authorization approved. You may proceed with discharge procedures.`
+                  ].map((tmpl, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => setSmsBody(tmpl)}
+                      className="w-full text-left p-2 rounded-lg border border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/50 text-[11px] text-slate-700 transition-all cursor-pointer"
+                    >
+                      {tmpl}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Custom Message Body</label>
+                <textarea
+                  required
+                  rows={3}
+                  value={smsBody}
+                  onChange={(e) => setSmsBody(e.target.value)}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 resize-none font-sans text-xs bg-slate-50/50"
+                />
+              </div>
+
+              <div className="flex justify-end space-x-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowSmsModal(false)}
+                  className="px-3.5 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-100 font-semibold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={smsSending}
+                  className="px-4 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold flex items-center space-x-1.5 cursor-pointer shadow-xs"
+                >
+                  {smsSending ? <span>Sending...</span> : <><Send className="w-3.5 h-3.5" /><span>Dispatch SMS</span></>}
                 </button>
               </div>
             </form>

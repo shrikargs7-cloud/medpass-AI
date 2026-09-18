@@ -80,6 +80,13 @@ export function App() {
           });
           setActivePortal('insurer');
         }}
+        onLoginAdmin={(admin) => {
+          setUserSession({
+            role: 'admin',
+            name: admin.name,
+            subtitle: 'System & Platform Administrator'
+          });
+        }}
         onPatientOtpLogin={() => setShowPatientOtpLogin(true)}
       />
     );

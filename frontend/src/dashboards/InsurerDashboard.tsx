@@ -2,13 +2,13 @@ import React, { useState, useEffect } from 'react';
 import {
   Shield, CheckCircle2, AlertTriangle, XCircle, FileText,
   Clock, ArrowUpRight, Search, Eye, MessageSquare, Plus,
-  Trash2, Award, CheckSquare, Layers, Building2, Landmark
+  Trash2, Award, CheckSquare, Layers, Building2, Landmark, Send, X
 } from 'lucide-react';
 import { ClaimItem, CaseDetail } from '../types';
 import {
   fetchClaims, fetchCaseDetail, approveClaim, rejectClaim,
   raiseClaimQuery, acknowledgeClaim, fetchAvailablePolicies,
-  createPolicy, deletePolicy
+  createPolicy, deletePolicy, sendSmsNotification
 } from '../api/client';
 
 export const InsurerDashboard: React.FC = () => {
@@ -25,6 +25,26 @@ export const InsurerDashboard: React.FC = () => {
   const [queryText, setQueryText] = useState('');
   const [ackModal, setAckModal] = useState(false);
   const [newPolicyModal, setNewPolicyModal] = useState(false);
+
+  // SMS Modal State
+  const [smsModal, setSmsModal] = useState(false);
+  const [smsPhone, setSmsPhone] = useState('+919845012345');
+  const [smsBody, setSmsBody] = useState('Payer Notice: Pre-authorization cashless request is processed.');
+  const [smsSending, setSmsSending] = useState(false);
+
+  const handleSendInsurerSms = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSmsSending(true);
+    try {
+      const res = await sendSmsNotification(smsPhone, smsBody);
+      notify(`SMS successfully dispatched to ${smsPhone} (${res.status})`);
+      setSmsModal(false);
+    } catch (err: any) {
+      alert(err.message || 'Failed to dispatch SMS');
+    } finally {
+      setSmsSending(false);
+    }
+  };
 
   // Acknowledgement Form
   const [ackForm, setAckForm] = useState({
@@ -383,6 +403,19 @@ export const InsurerDashboard: React.FC = () => {
                       >
                         <Award className="w-3.5 h-3.5" />
                         <span>Issue Acknowledgement</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (caseDetail) {
+                            setSmsBody(`Payer Update [Claim #${selectedClaim.external_reference || selectedClaim.id.slice(0, 8)}]: Authorized ₹${(selectedClaim.covered_amount || selectedClaim.total_claimed || 0).toLocaleString()}. Patient co-pay: ₹${(selectedClaim.patient_payable || 0).toLocaleString()}.`);
+                          }
+                          setSmsModal(true);
+                        }}
+                        className="px-2.5 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-semibold hover:bg-indigo-700 transition-colors cursor-pointer flex items-center space-x-1"
+                        title="Send SMS notification to beneficiary"
+                      >
+                        <MessageSquare className="w-3.5 h-3.5" />
+                        <span>Send SMS</span>
                       </button>
                       <button
                         onClick={() => setQueryModal(true)}
@@ -837,6 +870,97 @@ export const InsurerDashboard: React.FC = () => {
                 Send Query
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* SMS MODAL */}
+      {smsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 text-xs">
+            <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-100">
+              <div className="flex items-center space-x-2">
+                <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                  <MessageSquare className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Send Beneficiary SMS Alert</h3>
+                  <p className="text-[10px] text-slate-500">Payer Pre-auth & Claim Adjudication Gateway</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSmsModal(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSendInsurerSms} className="space-y-3.5">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Beneficiary Mobile Number</label>
+                <div className="relative">
+                  <Send className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+                  <input
+                    type="tel"
+                    required
+                    value={smsPhone}
+                    onChange={(e) => setSmsPhone(e.target.value)}
+                    placeholder="+91 98450 12345"
+                    className="w-full pl-8 pr-3 py-2 text-xs rounded-xl border border-slate-200 font-mono bg-slate-50/50"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Quick Adjudication Templates</label>
+                <div className="space-y-1.5">
+                  {[
+                    `Pre-authorization approved for ₹${(selectedClaim?.covered_amount || 0).toLocaleString()}. Claim token: ${selectedClaim?.external_reference || 'ACK-2026'}.`,
+                    `Query raised on claim item. Please provide discharge summary and pharmacy bill copy.`,
+                    `Claim settlement complete. Payment dispatched directly to hospital under cashless agreement.`,
+                    `Advisory: Deductions applied under room rent cap clause 3.2. Patient co-pay confirmed.`
+                  ].map((tmpl, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => setSmsBody(tmpl)}
+                      className="w-full text-left p-2 rounded-lg border border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/50 text-[11px] text-slate-700 transition-all cursor-pointer"
+                    >
+                      {tmpl}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Custom Message Body</label>
+                <textarea
+                  required
+                  rows={3}
+                  value={smsBody}
+                  onChange={(e) => setSmsBody(e.target.value)}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 resize-none font-sans text-xs bg-slate-50/50"
+                />
+              </div>
+
+              <div className="flex justify-end space-x-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setSmsModal(false)}
+                  className="px-3.5 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-100 font-semibold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={smsSending}
+                  className="px-4 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold flex items-center space-x-1.5 cursor-pointer shadow-xs"
+                >
+                  {smsSending ? <span>Sending...</span> : <><Send className="w-3.5 h-3.5" /><span>Dispatch SMS</span></>}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
