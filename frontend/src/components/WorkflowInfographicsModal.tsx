@@ -434,14 +434,14 @@ export const WorkflowInfographicsModal: React.FC<WorkflowInfographicsModalProps>
                 <div className="p-5 rounded-2xl bg-white border-2 border-emerald-400 shadow-sm space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-900 px-2 py-0.5 rounded">
-                      Zero Hallucination
+                      Audited Rules
                     </span>
                     <ShieldCheck className="w-5 h-5 text-emerald-600" />
                   </div>
                   <h3 className="text-sm font-extrabold text-slate-900">Deterministic Policy Engine</h3>
                   <div className="text-xs text-slate-600 space-y-1.5">
                     <p className="font-semibold text-emerald-900">Role: Financial Math & Rule Waterfall</p>
-                    <p>Zero LLM arithmetic. Strict pure code calculations:</p>
+                    <p>Strict pure code calculations:</p>
                     <ul className="list-disc list-inside text-slate-500 text-[11px] space-y-1">
                       <li>Exclusion checks (alcohol/cosmetic)</li>
                       <li>Waiting period validation</li>

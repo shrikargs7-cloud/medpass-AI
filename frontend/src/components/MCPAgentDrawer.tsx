@@ -26,7 +26,7 @@ export const MCPAgentDrawer: React.FC<MCPAgentDrawerProps> = ({
   const [messages, setMessages] = useState<Message[]>([
     {
       role: 'agent',
-      text: 'Hello! I am MedPass Agent. I utilize registered Model Context Protocol (MCP) tools to query policy terms, explain coverage deductions, or inspect discharge blockers. How can I assist you?'
+      text: 'Hello! I am MedPass Agent. I can help query policy terms, explain coverage deductions, or inspect discharge blockers. How can I assist you?'
     }
   ]);
 
@@ -79,9 +79,6 @@ export const MCPAgentDrawer: React.FC<MCPAgentDrawerProps> = ({
               <div>
                 <h2 className="text-sm font-bold flex items-center">
                   MedPass AI Agent
-                  <span className="ml-2 text-[10px] bg-teal-500/30 text-teal-300 px-1.5 py-0.2 rounded border border-teal-500/40">
-                    MCP Protocol
-                  </span>
                 </h2>
                 <p className="text-[11px] text-slate-400">Explainable tool querying & adjudication assistant</p>
               </div>
@@ -123,7 +120,7 @@ export const MCPAgentDrawer: React.FC<MCPAgentDrawerProps> = ({
                     <div className="mt-2.5 pt-2 border-t border-slate-100 space-y-1.5">
                       <div className="flex items-center text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
                         <Terminal className="w-3 h-3 mr-1 text-teal-600" />
-                        MCP Tool Executed
+                        Tool Executed
                       </div>
                       {m.tools.map((t, tidx) => (
                         <div key={tidx} className="bg-slate-900 text-teal-300 p-2 rounded-lg font-mono text-[10px] overflow-x-auto">
@@ -142,7 +139,7 @@ export const MCPAgentDrawer: React.FC<MCPAgentDrawerProps> = ({
             {loading && (
               <div className="flex items-center space-x-2 text-xs text-slate-500 bg-white border border-slate-200 p-3 rounded-2xl w-fit">
                 <Sparkles className="w-3.5 h-3.5 text-teal-600 animate-spin" />
-                <span>Agent invoking MCP tools...</span>
+                <span>Agent retrieving data...</span>
               </div>
             )}
           </div>
@@ -182,7 +179,7 @@ export const MCPAgentDrawer: React.FC<MCPAgentDrawerProps> = ({
                 type="text"
                 value={inputPrompt}
                 onChange={(e) => setInputPrompt(e.target.value)}
-                placeholder="Ask MCP agent about case, policy, or Trace..."
+                placeholder="Ask AI agent about case, policy, or coverage..."
                 className="flex-1 text-xs border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-hidden focus:ring-2 focus:ring-teal-500 bg-slate-50"
               />
               <button

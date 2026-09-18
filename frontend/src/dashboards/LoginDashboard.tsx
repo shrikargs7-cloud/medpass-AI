@@ -1114,7 +1114,6 @@ export const LoginDashboard: React.FC<LoginDashboardProps> = ({
 
       {/* Footer */}
       <footer className="py-4 text-center text-[11px] text-slate-400 border-t border-slate-200">
-        MedPass AI Enterprise • Direct Secure Authentication • Healthcare Coordination Gateway
       </footer>
     </div>
   );

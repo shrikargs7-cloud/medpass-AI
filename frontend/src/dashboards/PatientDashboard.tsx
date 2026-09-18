@@ -152,7 +152,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
       {/* Visual Graph: Financial Waterfall Breakdown */}
       <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs">
         <h2 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-3">
-          Coverage Waterfall Breakdown
+          Finance
         </h2>
         <FinancialWaterfallChart
           gross={patientCase.total_gross}

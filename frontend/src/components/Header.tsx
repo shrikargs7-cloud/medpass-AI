@@ -31,9 +31,6 @@ export const Header: React.FC<HeaderProps> = ({
             MedPass Health Suite
           </span>
           <span className="text-slate-600 hidden sm:inline">•</span>
-          <span className="inline-flex items-center px-2 py-0.5 rounded bg-slate-800 text-teal-300 border border-teal-500/30 text-[11px]">
-            NHCX-Shaped Mock (IRDAI Sandbox)
-          </span>
           <span className="inline-flex items-center px-2 py-0.5 rounded bg-slate-800 text-emerald-300 border border-emerald-500/30 text-[11px]">
             Demo Environment • Synthetic Data
           </span>
@@ -130,7 +127,7 @@ export const Header: React.FC<HeaderProps> = ({
               className="flex items-center px-3.5 py-2 rounded-xl text-xs font-semibold bg-gradient-to-r from-teal-600 to-teal-700 text-white shadow-sm hover:from-teal-700 hover:to-teal-800 transition-all cursor-pointer"
             >
               <Bot className="w-4 h-4 mr-1.5" />
-              AI Agent (MCP)
+              AI Agent
             </button>
 
             {onLogout && (

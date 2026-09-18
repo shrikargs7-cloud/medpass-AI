@@ -750,11 +750,8 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
             <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                  Deterministic Financial Waterfall Analysis
+                  Financial Analysis
                 </h3>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-mono">
-                  ZERO ARITHMETIC HALLUCINATION
-                </span>
               </div>
               <FinancialWaterfallChart
                 gross={selectedCase.total_gross}

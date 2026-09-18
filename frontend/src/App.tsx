@@ -120,12 +120,8 @@ export function App() {
         currentCaseId={selectedCaseId}
       />
 
-      {/* Professional Enterprise Footer */}
+      {/* Footer */}
       <footer className="bg-white border-t border-slate-200 py-4 px-6 text-center text-xs text-slate-500">
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
-          <span>MedPass AI Enterprise Healthcare Platform • Hospital & Payer Automation Suite</span>
-          <span className="font-mono text-slate-400">IRDAI Cashless Everywhere • ABDM FHIR Standards • 256-Bit Encrypted</span>
-        </div>
       </footer>
     </div>
   );
