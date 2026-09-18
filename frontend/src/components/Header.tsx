@@ -1,7 +1,7 @@
 import React from 'react';
 import {
   Activity, Shield, User, Bot,
-  LogOut, CheckCircle2, Lock
+  LogOut, Lock
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -23,27 +23,6 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   return (
     <header className="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-xs font-sans">
-      {/* Top Enterprise Compliance & Gateway Status Banner */}
-      <div className="bg-slate-900 text-slate-300 text-xs px-4 py-1.5 flex items-center justify-between">
-        <div className="flex items-center space-x-3 overflow-x-auto">
-          <span className="font-semibold text-white flex items-center">
-            <CheckCircle2 className="w-3.5 h-3.5 text-teal-400 mr-1.5" />
-            MedPass Health Suite
-          </span>
-          <span className="text-slate-600 hidden sm:inline">•</span>
-          <span className="inline-flex items-center px-2 py-0.5 rounded bg-slate-800 text-emerald-300 border border-emerald-500/30 text-[11px]">
-            Demo Environment • Synthetic Data
-          </span>
-        </div>
-
-        <div className="hidden md:flex items-center space-x-3 text-slate-400 text-xs">
-          <span className="flex items-center text-teal-400 font-mono text-[11px]">
-            <span className="w-2 h-2 rounded-full bg-teal-400 animate-pulse mr-1.5"></span>
-            Audited Rule Engine • Secure Transport
-          </span>
-        </div>
-      </div>
-
       {/* Main Navigation Bar */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
