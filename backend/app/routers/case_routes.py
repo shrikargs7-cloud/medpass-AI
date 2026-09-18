@@ -18,6 +18,7 @@ from backend.app.services.policy_engine import DeterministicPolicyEngine
 from backend.app.services.calculation_engine import FinancialCalculationEngine
 from backend.app.services.blocker_engine import ReadinessAndBlockerEngine
 from backend.app.services.trace_event_service import TraceEventService
+from backend.app.services.case_workflow_service import CaseWorkflowService, CanonicalCaseState
 from backend.app.integrations.beeceptor.client import BeeceptorIntegrationClient
 from backend.app.integrations.n8n.dispatcher import N8NWebhookDispatcher
 
@@ -152,82 +153,20 @@ def get_case_detail(case_id: str, db: Session = Depends(get_db)):
 
 @router.post("/{case_id}/evaluate", response_model=CaseDetailResponse)
 def evaluate_case(case_id: str, db: Session = Depends(get_db)):
-    case = db.query(Case).filter(Case.id == case_id).first()
+    case = db.query(Case).filter((Case.id == case_id) | (Case.case_number == case_id)).first()
     if not case:
         raise HTTPException(status_code=404, detail="Case not found")
 
-    # Clear previous decisions
-    db.query(CoverageDecision).filter(CoverageDecision.case_id == case.id).delete()
-    db.flush()
+    calc_res = CaseWorkflowService.evaluate(db, case)
+    return get_case_detail(case.id, db)
 
-    # Calculate deterministic coverage
-    calc_res = FinancialCalculationEngine.calculate_case_financials(
-        case.policy, case.line_items, case.primary_diagnosis_code
-    )
+@router.post("/{case_id}/discharge", response_model=CaseDetailResponse)
+def discharge_case(case_id: str, db: Session = Depends(get_db)):
+    case = db.query(Case).filter((Case.id == case_id) | (Case.case_number == case_id)).first()
+    if not case:
+        raise HTTPException(status_code=404, detail="Case not found")
 
-    for ld in calc_res["line_decisions"]:
-        decision = CoverageDecision(
-            case_id=case.id,
-            line_item_id=ld["line_item_id"],
-            decision_status=ld["decision_status"],
-            eligible_amount=ld["eligible_amount"],
-            covered_amount=ld["covered_amount"],
-            patient_payable=ld["patient_payable"],
-            confidence=ld["confidence"],
-            rule_id=ld["rule_id"],
-            policy_field=ld["policy_field"],
-            requires_human_review=ld["requires_human_review"],
-            explanation=ld["explanation"]
-        )
-        db.add(decision)
-        db.flush()
-
-        for stg in ld.get("stages", []):
-            ci = CalculationItem(
-                decision_id=decision.id,
-                stage=stg["stage"],
-                stage_name=stg["stage_name"],
-                input_amount=stg["input_amount"],
-                adjustment_amount=stg["adjustment_amount"],
-                output_amount=stg["output_amount"],
-                formula=stg.get("formula")
-            )
-            db.add(ci)
-
-    # Re-evaluate readiness
-    readiness = ReadinessAndBlockerEngine.evaluate_readiness(case)
-    case.readiness_score = readiness["total_score"]
-    case.readiness_band = readiness["band"]
-    if case.case_status == "INTAKE_COMPLETE" and case.readiness_band == "SUBMISSION_READY":
-        case.case_status = "READY_FOR_REVIEW"
-
-    # Re-evaluate blockers
-    existing_blockers = {b.blocker_type for b in (case.blockers or []) if not b.is_resolved}
-    new_blockers = ReadinessAndBlockerEngine.identify_blockers(case)
-    for nb in new_blockers:
-        if nb["blocker_type"] not in existing_blockers:
-            b_rec = DischargeBlocker(
-                case_id=case.id,
-                blocker_type=nb["blocker_type"],
-                severity=nb["severity"],
-                owner_role=nb["owner_role"],
-                description=nb["description"],
-                action_required=nb.get("action_required")
-            )
-            db.add(b_rec)
-
-    db.commit()
-
-    TraceEventService.record_event(db, "CASE_EVALUATED", case, actor_role="HOSPITAL_STAFF", extra_data=calc_res)
-    N8NWebhookDispatcher.dispatch_case_event("CASE_EVALUATED", {
-        "case_number": case.case_number,
-        "readiness": case.readiness_score,
-        "total_gross": calc_res["total_gross"],
-        "total_covered": calc_res["total_covered"],
-        "patient_payable": calc_res["total_patient_payable"]
-    })
-
-    db.refresh(case)
+    case = CaseWorkflowService.discharge(db, case)
     return get_case_detail(case.id, db)
 
 @router.post("/{case_id}/submit")

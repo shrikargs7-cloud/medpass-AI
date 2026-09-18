@@ -3,6 +3,7 @@ import hashlib
 import uuid
 from typing import Dict, Any, List, Tuple, Optional
 from datetime import datetime, date
+from backend.app.config import settings
 
 class PrivacyDeidentificationService:
     """
@@ -82,11 +83,13 @@ class PrivacyDeidentificationService:
         return sanitized, passed, quarantine_reasons
 
     @classmethod
-    def generate_subject_key(cls, operational_id: str, salt: str = "MEDPASS_TRACE_SALT_2026") -> str:
+    def generate_subject_key(cls, operational_id: str, salt: Optional[str] = None) -> str:
         """
         One-way pseudonymization for patient identifier into safe trace subject key.
+        Uses server-side secret seed.
         """
-        hasher = hashlib.sha256((operational_id + salt).encode("utf-8"))
+        active_salt = salt or settings.TRACE_PSEUDONYM_SECRET
+        hasher = hashlib.sha256((operational_id + active_salt).encode("utf-8"))
         return str(uuid.UUID(bytes=hasher.digest()[:16]))
 
     @classmethod

@@ -286,3 +286,69 @@ export async function triggerN8NWebhook(eventType: string = 'CASE_STATUS_CHANGED
   return res.json();
 }
 
+export async function loginApi(payload: {
+  email?: string;
+  phone?: string;
+  password?: string;
+  role?: string;
+  firebase_uid?: string;
+}): Promise<{
+  authenticated: boolean;
+  uid: string;
+  name: string;
+  role: 'admin' | 'hospital' | 'insurer' | 'patient';
+  email?: string;
+  phone?: string;
+  token: string;
+  organization?: string;
+}> {
+  const res = await fetch(`${API_BASE}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Authentication failed' }));
+    throw new Error(err.detail || 'Authentication failed');
+  }
+  return res.json();
+}
+
+export async function fetchAdminOverview(): Promise<{
+  kpis: {
+    hospitals: number;
+    insurers: number;
+    cases: number;
+    active_cases: number;
+    policies: number;
+    claims: number;
+    pipeline_events: number;
+    outbox_processed: number;
+    outbox_pending: number;
+    privacy_passed: number;
+    privacy_blocked: number;
+    governed_datasets: number;
+    total_encounters: number;
+  };
+  needs_attention: Array<{
+    id: string;
+    type: string;
+    severity: string;
+    title: string;
+    reason: string;
+    action: string;
+    case_id: string;
+  }>;
+  system_status: {
+    api: string;
+    database: string;
+    outbox_relay: string;
+    privacy_gate: string;
+    last_audit_timestamp: string;
+  };
+}> {
+  const res = await fetch(`${API_BASE}/admin/overview`);
+  if (!res.ok) throw new Error('Failed to fetch admin overview');
+  return res.json();
+}
+

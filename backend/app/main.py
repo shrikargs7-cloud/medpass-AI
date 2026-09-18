@@ -15,6 +15,8 @@ from backend.app.routers.claim_routes import router as claim_router
 from backend.app.routers.trace_routes import router as trace_router
 from backend.app.routers.mcp_routes import router as mcp_router
 from backend.app.routers.integration_routes import router as integration_router
+from backend.app.routers.auth_routes import router as auth_router
+from backend.app.routers.admin_routes import router as admin_router
 from backend.app.routers import sms
 
 @asynccontextmanager
@@ -92,6 +94,8 @@ app.include_router(claim_router, prefix="/api")
 app.include_router(trace_router, prefix="/api")
 app.include_router(mcp_router, prefix="/api")
 app.include_router(integration_router, prefix="/api")
+app.include_router(auth_router, prefix="/api")
+app.include_router(admin_router, prefix="/api")
 app.include_router(sms.router)
 
 if __name__ == "__main__":

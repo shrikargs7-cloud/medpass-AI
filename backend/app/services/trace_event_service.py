@@ -1,7 +1,10 @@
 import json
+import hashlib
+import uuid
 from datetime import datetime, date
 from typing import Dict, Any, Optional
 from sqlalchemy.orm import Session
+from backend.app.config import settings
 from backend.app.models.audit import OutboxEvent, AuditLog
 from backend.app.models.operational import Case
 from backend.app.models.trace import (
@@ -10,10 +13,17 @@ from backend.app.models.trace import (
 )
 from backend.app.services.privacy_service import PrivacyDeidentificationService
 
+INSURANCE_EVENT_TYPES = {
+    "PREAUTH_REQUESTED", "PREAUTH_SUBMITTED", "PREAUTH_APPROVED",
+    "PREAUTH_REJECTED", "PREAUTH_QUERY", "CLAIM_SUBMITTED",
+    "CLAIM_QUERY", "CLAIM_APPROVED", "CLAIM_REJECTED", "CLAIM_SETTLED"
+}
+
 class TraceEventService:
     """
     Manages Transactional Outbox and synchronizes domain workflow events
     into the governed Trace Commons schema after passing through the privacy gate.
+    Strictly decouples operational identifiers from research identities.
     """
 
     @staticmethod
@@ -75,7 +85,7 @@ class TraceEventService:
         if not patient:
             return
 
-        # Anonymize subject
+        # 1. Pseudonymize Subject
         subject_key = PrivacyDeidentificationService.generate_subject_key(patient.id)
         subject = db.query(TraceSubject).filter(TraceSubject.subject_key == subject_key).first()
         if not subject:
@@ -88,9 +98,12 @@ class TraceEventService:
             db.add(subject)
             db.flush()
 
-        # Anonymize facility
+        # 2. Anonymize Facility (opaque hashed identifier with generalized tier attributes)
         hospital = case.hospital
-        fac_key = hospital.hospital_ref if hospital else "FAC-DEFAULT"
+        raw_fac = hospital.hospital_ref if hospital else "DEFAULT_FAC"
+        hashed_fac = hashlib.sha256((raw_fac + settings.TRACE_PSEUDONYM_SECRET).encode()).hexdigest()[:8].upper()
+        fac_key = f"FAC-{hashed_fac}"
+
         facility = db.query(TraceFacility).filter(TraceFacility.facility_key == fac_key).first()
         if not facility:
             facility = TraceFacility(
@@ -102,8 +115,10 @@ class TraceEventService:
             db.add(facility)
             db.flush()
 
-        # Trace Encounter
-        enc_key = f"ENC-{case.case_number}"
+        # 3. Opaque Encounter Key (no case_number in Trace identifier)
+        enc_hash = hashlib.sha256((case.id + settings.TRACE_PSEUDONYM_SECRET).encode()).hexdigest()[:16]
+        enc_key = f"ENC-{enc_hash}"
+
         encounter = db.query(TraceEncounter).filter(TraceEncounter.encounter_key == enc_key).first()
         start_month = case.admission_at.date().replace(day=1) if case.admission_at else date.today().replace(day=1)
         end_month = case.discharge_at.date().replace(day=1) if case.discharge_at else start_month
@@ -121,7 +136,7 @@ class TraceEventService:
             db.add(encounter)
             db.flush()
 
-        # Add condition if primary diagnosis is present
+        # 4. Add condition if primary diagnosis is present
         if case.primary_diagnosis_code:
             existing_cond = db.query(TraceCondition).filter(
                 TraceCondition.encounter_key == encounter.encounter_key,
@@ -138,7 +153,7 @@ class TraceEventService:
                 )
                 db.add(cond)
 
-        # Add procedures from line items
+        # 5. Add procedures from line items
         for item in (case.line_items or []):
             if item.category in ["SURGERY", "PROCEDURE"]:
                 existing_proc = db.query(TraceProcedure).filter(
@@ -156,34 +171,35 @@ class TraceEventService:
                     )
                     db.add(proc)
 
-        # Record Insurance Event
-        gross = sum(float(it.gross_amount) for it in case.line_items) if case.line_items else 0.0
-        covered = sum(float(it.decision.covered_amount) for it in case.line_items if it.decision) if case.line_items else 0.0
-        payable = sum(float(it.decision.patient_payable) for it in case.line_items if it.decision) if case.line_items else 0.0
+        # 6. Record Insurance Event ONLY if event_type is an insurance event
+        if event_type in INSURANCE_EVENT_TYPES or "CLAIM" in event_type or "PREAUTH" in event_type:
+            gross = sum(float(it.gross_amount) for it in case.line_items) if case.line_items else 0.0
+            covered = sum(float(it.decision.covered_amount) for it in case.line_items if it.decision) if case.line_items else 0.0
+            payable = sum(float(it.decision.patient_payable) for it in case.line_items if it.decision) if case.line_items else 0.0
 
-        amount_bucket = "<25K"
-        if gross > 250000:
-            amount_bucket = "250K+"
-        elif gross > 100000:
-            amount_bucket = "100K-250K"
-        elif gross > 50000:
-            amount_bucket = "50K-100K"
-        elif gross > 25000:
-            amount_bucket = "25K-50K"
+            amount_bucket = "<25K"
+            if gross > 250000:
+                amount_bucket = "250K+"
+            elif gross > 100000:
+                amount_bucket = "100K-250K"
+            elif gross > 50000:
+                amount_bucket = "50K-100K"
+            elif gross > 25000:
+                amount_bucket = "25K-50K"
 
-        ins_ev = TraceInsuranceEvent(
-            encounter_key=encounter.encounter_key,
-            event_type=event_type,
-            payer_tier="PRIVATE_A",
-            plan_category="COMPREHENSIVE",
-            amount_bucket=amount_bucket,
-            covered_amount_numeric=round(covered, 2),
-            patient_payable_numeric=round(payable, 2),
-            event_month=start_month
-        )
-        db.add(ins_ev)
+            ins_ev = TraceInsuranceEvent(
+                encounter_key=encounter.encounter_key,
+                event_type=event_type,
+                payer_tier="PRIVATE_A",
+                plan_category="COMPREHENSIVE",
+                amount_bucket=amount_bucket,
+                covered_amount_numeric=round(covered, 2),
+                patient_payable_numeric=round(payable, 2),
+                event_month=start_month
+            )
+            db.add(ins_ev)
 
-        # Record Workflow Event
+        # 7. Record Workflow Event for operational lifecycle progressions
         stage = "INTAKE"
         if "SUBMIT" in event_type:
             stage = "PREAUTH"
@@ -191,6 +207,8 @@ class TraceEventService:
             stage = "EVALUATION"
         elif "DISCHARGE" in event_type:
             stage = "DISCHARGE"
+        elif "DOCUMENT" in event_type:
+            stage = "CLINICAL_DOCUMENTATION"
 
         wf_ev = TraceWorkflowEvent(
             encounter_key=encounter.encounter_key,

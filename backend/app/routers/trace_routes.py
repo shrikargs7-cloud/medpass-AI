@@ -12,6 +12,7 @@ from backend.app.models.trace import (
     TraceEncounter, TraceSubject, TraceFacility, TraceCondition,
     TraceProcedure, TraceInsuranceEvent, TraceWorkflowEvent
 )
+from backend.app.models.audit import AuditLog
 from backend.app.schemas.trace import (
     CohortFilter, CohortPreviewResponse, ExportJobCreate, ExportJobResponse,
     DatasetCardResponse, DatasetVersionResponse
@@ -217,6 +218,21 @@ def download_export_package(job_id: str, db: Session = Depends(get_db)):
     job = db.query(ExportJob).filter(ExportJob.id == job_id).first()
     if not job or not job.archive_path or not os.path.exists(job.archive_path):
         raise HTTPException(status_code=404, detail="Export bundle file not found or expired")
+
+    # Authoritative audit log for research export download
+    audit = AuditLog(
+        actor_role="RESEARCHER",
+        action="DATASET_EXPORT_DOWNLOADED",
+        resource_type="EXPORT_JOB",
+        resource_id=job.id,
+        details={
+            "dataset_version": job.dataset_version,
+            "format": job.format,
+            "checksum": job.checksum_sha256
+        }
+    )
+    db.add(audit)
+    db.commit()
 
     filename = os.path.basename(job.archive_path)
     return FileResponse(

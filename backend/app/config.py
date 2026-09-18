@@ -21,7 +21,8 @@ class Settings(BaseSettings):
     # AI / LLM Configuration
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
-    GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
+    # Privacy & Anonymization
+    TRACE_PSEUDONYM_SECRET: str = os.getenv("TRACE_PSEUDONYM_SECRET", "medpass_prod_secret_salt_9842")
 
     # Storage paths
     STORAGE_DIR: str = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "storage"))

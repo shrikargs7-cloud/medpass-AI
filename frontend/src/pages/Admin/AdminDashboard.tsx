@@ -10,7 +10,8 @@ import {
 import {
   fetchCases, fetchCaseDetail, fetchAvailableHospitals,
   fetchAvailablePolicies, fetchClaims, fetchTraceOverview,
-  fetchDatasets, triggerN8NWebhook, sendSmsNotification
+  fetchDatasets, triggerN8NWebhook, sendSmsNotification,
+  fetchAdminOverview
 } from '../../api/client';
 import { CaseDetail, ClaimItem, TraceOverview } from '../../types';
 
@@ -100,6 +101,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, userNa
   const [policiesList, setPoliciesList] = useState<PolicyRecord[]>([]);
   const [traceOverview, setTraceOverview] = useState<TraceOverview | null>(null);
   const [datasetsList, setDatasetsList] = useState<any[]>([]);
+  const [adminOverview, setAdminOverview] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   // Detail Modal States
@@ -174,12 +176,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, userNa
   const loadSystemData = async () => {
     setLoading(true);
     try {
-      const [casesData, claimsData, policiesData, traceData, datasetsData] = await Promise.allSettled([
+      const [casesData, claimsData, policiesData, traceData, datasetsData, overviewData] = await Promise.allSettled([
         fetchCases(),
         fetchClaims(),
         fetchAvailablePolicies(),
         fetchTraceOverview(),
-        fetchDatasets()
+        fetchDatasets(),
+        fetchAdminOverview()
       ]);
 
       const resolvedCases = casesData.status === 'fulfilled' ? casesData.value : [];
@@ -187,11 +190,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, userNa
       const resolvedPolicies = policiesData.status === 'fulfilled' ? policiesData.value : [];
       const resolvedTrace = traceData.status === 'fulfilled' ? traceData.value : null;
       const resolvedDatasets = datasetsData.status === 'fulfilled' ? datasetsData.value : [];
+      const resolvedOverview = overviewData.status === 'fulfilled' ? overviewData.value : null;
 
       setCases(resolvedCases);
       setClaims(resolvedClaims);
       setTraceOverview(resolvedTrace);
       setDatasetsList(resolvedDatasets);
+      setAdminOverview(resolvedOverview);
 
       // Build real hospital list with live cases count
       setHospitalsList([
@@ -485,12 +490,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, userNa
   const activeInsurersCount = insurersList.filter(i => i.status === 'Active').length;
   const openCasesCount = cases.filter(c => c.case_status !== 'DISCHARGED' && c.case_status !== 'COMPLETED').length;
   const casesNeedingActionCount = cases.filter(c => c.readiness_band === 'BLOCKED' || c.case_status === 'READY_FOR_REVIEW').length;
-  const eventsProcessedCount = (cases.length * 14) + (claims.length * 8) + 124;
+  const eventsProcessedCount = adminOverview?.kpis?.pipeline_events ?? (cases.length * 14 + claims.length * 8 + 124);
   const failedJobsCount = 0;
-  const privacyPassedCount = 4;
-  const privacyBlockedCount = 1;
-  const publishedDatasetsCount = datasetsList.length || 2;
-  const draftDatasetsCount = 1;
+  const privacyPassedCount = adminOverview?.kpis?.privacy_passed ?? 4;
+  const privacyBlockedCount = adminOverview?.kpis?.privacy_blocked ?? 0;
+  const publishedDatasetsCount = adminOverview?.kpis?.governed_datasets ?? (datasetsList.length || 1);
+  const draftDatasetsCount = 0;
 
   // Filtered lists based on global search
   const filteredCases = cases.filter(c => {
