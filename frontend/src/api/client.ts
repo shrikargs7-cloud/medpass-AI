@@ -139,9 +139,10 @@ export async function resolveBlocker(caseId: string, blockerId: string): Promise
   return res.json();
 }
 
-export async function uploadDocument(caseId: string, docType: string, textContent?: string): Promise<any> {
+export async function uploadDocument(caseId: string, docType: string, textContent?: string, file?: File): Promise<any> {
   const formData = new FormData();
   formData.append('doc_type', docType);
+  if (file) formData.append('file', file);
   if (textContent) formData.append('raw_text', textContent);
 
   const res = await fetch(`${API_BASE}/cases/${caseId}/documents`, {

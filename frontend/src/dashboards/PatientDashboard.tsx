@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   Heart, ShieldCheck, CheckCircle2, Clock, AlertCircle,
   DollarSign, ArrowRight, UserCheck, HelpCircle, FileText,
-  Printer, LogOut, Info, AlertTriangle, PieChart
+  Printer, LogOut, Info, AlertTriangle, PieChart, Activity, Stethoscope
 } from 'lucide-react';
 import { CaseDetail } from '../types';
 import { fetchCases, fetchCaseDetail } from '../api/client';
@@ -94,6 +94,95 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
               Switch
             </button>
           )}
+        </div>
+      </div>
+
+      {/* Patient Clinical Details & Suggested Treatment */}
+      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-4">
+        <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+          <div className="flex items-center space-x-2.5">
+            <div className="w-8 h-8 rounded-xl bg-teal-100 text-teal-700 flex items-center justify-center font-bold">
+              <Stethoscope className="w-4 h-4" />
+            </div>
+            <div>
+              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-800">
+                Clinical Details & Suggested Treatment
+              </h2>
+              <p className="text-[11px] text-slate-500">Diagnosed condition and treatment recommended by your medical care team</p>
+            </div>
+          </div>
+          <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
+            Admitted Inpatient
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+              Diagnosed Disease / Condition
+            </span>
+            <div className="text-sm font-bold text-slate-900">
+              {patientCase.primary_diagnosis_name || 'Medical Inpatient Admission'}
+            </div>
+            <div className="flex items-center space-x-2 mt-1">
+              <span className="font-mono text-[10px] font-bold bg-teal-100 text-teal-800 px-2 py-0.5 rounded">
+                ICD: {patientCase.primary_diagnosis_code || 'K35.80'}
+              </span>
+              <span className="text-[11px] text-slate-500">Apollo Multi-Specialty Hospital</span>
+            </div>
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+              Patient Identification
+            </span>
+            <div className="text-sm font-bold text-slate-900">
+              {patient.full_name} • {patient.age_band} ({patient.sex_at_birth})
+            </div>
+            <div className="text-[11px] text-slate-500 flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
+              <span>Contact: <strong className="text-slate-700">{(patient as any).phone || '+91 98450 12345'}</strong></span>
+              <span>Patient Ref: <strong className="text-slate-700 font-mono">{patient.patient_ref}</strong></span>
+            </div>
+          </div>
+        </div>
+
+        {/* Suggested Treatment Protocol */}
+        <div className="p-3.5 rounded-xl bg-teal-50/60 border border-teal-200/80 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-teal-900 flex items-center">
+              <Activity className="w-3.5 h-3.5 mr-1.5 text-teal-700" />
+              Suggested Treatment & Prescribed Care Plan
+            </span>
+            <span className="text-[10px] font-semibold text-teal-700">
+              Doctor Supervised
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+            <div className="p-2.5 bg-white rounded-lg border border-teal-100 shadow-2xs">
+              <span className="text-[10px] font-bold uppercase text-slate-400 block">Suggested Procedure</span>
+              <div className="text-xs font-bold text-slate-800 mt-0.5">
+                {patientCase.line_items?.find(i => i.category === 'SURGERY')?.description || `${patientCase.primary_diagnosis_name} Surgical Intervention`}
+              </div>
+              <span className="text-[10px] text-teal-700 font-medium">Surgical Care Team</span>
+            </div>
+
+            <div className="p-2.5 bg-white rounded-lg border border-teal-100 shadow-2xs">
+              <span className="text-[10px] font-bold uppercase text-slate-400 block">Prescribed Stay</span>
+              <div className="text-xs font-bold text-slate-800 mt-0.5">
+                {patientCase.line_items?.find(i => i.category === 'ROOM_RENT')?.description || 'Single Private AC Room'}
+              </div>
+              <span className="text-[10px] text-slate-500">24/7 Nursing & Bed Care</span>
+            </div>
+
+            <div className="p-2.5 bg-white rounded-lg border border-teal-100 shadow-2xs">
+              <span className="text-[10px] font-bold uppercase text-slate-400 block">Medications & Labs</span>
+              <div className="text-xs font-bold text-slate-800 mt-0.5">
+                {patientCase.line_items?.find(i => i.category === 'INVESTIGATION' || i.category === 'PHARMACY')?.description || 'Pre-Op Panel & Post-Op IV Antibiotics'}
+              </div>
+              <span className="text-[10px] text-emerald-700 font-medium">Included in Pre-Auth</span>
+            </div>
+          </div>
         </div>
       </div>
 

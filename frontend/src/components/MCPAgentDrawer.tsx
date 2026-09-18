@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Bot, X, Send, Wrench, ShieldCheck, Terminal, Sparkles } from 'lucide-react';
+import { Bot, X, Send, Wrench, ShieldCheck, Sparkles } from 'lucide-react';
 import { fetchMCPTools, chatMCPAgent } from '../api/client';
 import { MCPTool } from '../types';
 
@@ -114,24 +114,6 @@ export const MCPAgentDrawer: React.FC<MCPAgentDrawerProps> = ({
                   }`}
                 >
                   <p className="whitespace-pre-line leading-relaxed">{m.text}</p>
-
-                  {/* Tool Execution Card */}
-                  {m.tools && m.tools.length > 0 && (
-                    <div className="mt-2.5 pt-2 border-t border-slate-100 space-y-1.5">
-                      <div className="flex items-center text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
-                        <Terminal className="w-3 h-3 mr-1 text-teal-600" />
-                        Tool Executed
-                      </div>
-                      {m.tools.map((t, tidx) => (
-                        <div key={tidx} className="bg-slate-900 text-teal-300 p-2 rounded-lg font-mono text-[10px] overflow-x-auto">
-                          <span className="text-amber-400 font-bold">{t.tool}()</span>
-                          <pre className="text-slate-300 text-[9px] mt-1">
-                            {JSON.stringify(t.result, null, 2)}
-                          </pre>
-                        </div>
-                      ))}
-                    </div>
-                  )}
                 </div>
               </div>
             ))}

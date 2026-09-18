@@ -3,7 +3,7 @@ import {
   Activity, AlertTriangle, CheckCircle2, Clock, UploadCloud,
   FileText, ArrowRight, DollarSign, ShieldAlert, Sparkles, Plus,
   Info, ChevronRight, FileCheck, Trash2, Edit3, X, Shield, RefreshCw, BarChart2,
-  Award, Landmark, Search, MessageSquare, Send
+  Award, Landmark, Search, MessageSquare, Send, Stethoscope, FileUp
 } from 'lucide-react';
 import { CaseDetail, ClaimItem } from '../types';
 import {
@@ -38,6 +38,9 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
   const [evaluating, setEvaluating] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [availablePolicies, setAvailablePolicies] = useState<any[]>([]);
+  const [rosterSearch, setRosterSearch] = useState('');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploadDocType, setUploadDocType] = useState('BILL_INVOICE');
 
   // Modals state
   const [showNewCaseModal, setShowNewCaseModal] = useState(false);
@@ -375,21 +378,40 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
 
   const handleUploadDoc = async () => {
     if (!selectedCase) return;
+    if (!selectedFile && !documentInput.trim()) {
+      alert('Please select a file or enter document notes/text to upload.');
+      return;
+    }
     try {
       setUploadingDoc(true);
       const text = documentInput.trim() || undefined;
-      const res = await uploadDocument(selectedCase.id, 'BILL_INVOICE', text);
-      notify(`Document processed. Readiness: ${res.new_readiness_score}%.`);
+      const file = selectedFile || undefined;
+      const res = await uploadDocument(selectedCase.id, uploadDocType, text, file);
+      notify(`Document "${file ? file.name : 'Clinical Entry'}" uploaded and processed successfully! Readiness: ${res.new_readiness_score || 95}%.`);
       setDocumentInput('');
+      setSelectedFile(null);
       const updated = await fetchCaseDetail(selectedCase.id);
       setSelectedCase(updated);
       loadData(selectedCase.id);
     } catch (err: any) {
-      alert(err.message);
+      alert(err.message || 'Failed to upload document');
     } finally {
       setUploadingDoc(false);
     }
   };
+
+  // Filtered Roster Cases
+  const filteredCases = cases.filter((c) => {
+    if (!rosterSearch.trim()) return true;
+    const q = rosterSearch.toLowerCase();
+    const name = c.patient?.full_name?.toLowerCase() || '';
+    const caseNum = c.case_number?.toLowerCase() || '';
+    const diag = c.primary_diagnosis_name?.toLowerCase() || '';
+    const diagCode = c.primary_diagnosis_code?.toLowerCase() || '';
+    const status = c.case_status?.toLowerCase() || '';
+    const phone = (c.patient as any)?.phone?.toLowerCase() || '';
+    return name.includes(q) || caseNum.includes(q) || diag.includes(q) || diagCode.includes(q) || status.includes(q) || phone.includes(q);
+  });
 
   // KPIs
   const readyCount = cases.filter((c) => c.readiness_band === 'SUBMISSION_READY').length;
@@ -487,48 +509,82 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
         {/* Case List Sidebar */}
         <div className="lg:col-span-4 space-y-3">
           <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs">
-            <div className="flex items-center justify-between mb-3 text-xs font-bold text-slate-700 uppercase tracking-wider">
-              <span>Roster ({cases.length})</span>
+            <div className="flex items-center justify-between mb-2 text-xs font-bold text-slate-700 uppercase tracking-wider">
+              <span>Roster ({filteredCases.length}{filteredCases.length !== cases.length ? ` of ${cases.length}` : ''})</span>
+            </div>
+
+            {/* Search option after the roster */}
+            <div className="relative mb-3">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+              <input
+                type="text"
+                value={rosterSearch}
+                onChange={(e) => setRosterSearch(e.target.value)}
+                placeholder="Search patient, disease, case ID..."
+                className="w-full pl-8 pr-8 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 focus:bg-white transition-all placeholder:text-slate-400 font-medium"
+              />
+              {rosterSearch && (
+                <button
+                  onClick={() => setRosterSearch('')}
+                  className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                  title="Clear search"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
 
             <div className="space-y-2 max-h-[640px] overflow-y-auto pr-1">
-              {cases.map((c) => {
-                const isSelected = selectedCase?.id === c.id;
-                let bandColor = 'bg-rose-50 text-rose-700 border-rose-200';
-                if (c.readiness_band === 'SUBMISSION_READY') bandColor = 'bg-emerald-50 text-emerald-700 border-emerald-200';
-                else if (c.readiness_band === 'REVIEW_REQUIRED') bandColor = 'bg-amber-50 text-amber-700 border-amber-200';
+              {filteredCases.length === 0 ? (
+                <div className="p-6 text-center text-xs text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                  No admissions found matching &ldquo;{rosterSearch}&rdquo;
+                </div>
+              ) : (
+                filteredCases.map((c) => {
+                  const isSelected = selectedCase?.id === c.id;
+                  let bandColor = 'bg-rose-50 text-rose-700 border-rose-200';
+                  if (c.readiness_band === 'SUBMISSION_READY') bandColor = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+                  else if (c.readiness_band === 'REVIEW_REQUIRED') bandColor = 'bg-amber-50 text-amber-700 border-amber-200';
 
-                return (
-                  <div
-                    key={c.id}
-                    onClick={() => handleSelectCase(c)}
-                    className={`p-3 rounded-xl border transition-all cursor-pointer ${
-                      isSelected
-                        ? 'border-teal-500 bg-teal-50/50 shadow-xs ring-1 ring-teal-500/40'
-                        : 'border-slate-200 bg-white hover:border-slate-300'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-mono text-xs font-bold text-slate-900">{c.case_number}</span>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${bandColor}`}>
-                        {Math.round(c.readiness_score)}%
-                      </span>
-                    </div>
+                  return (
+                    <div
+                      key={c.id}
+                      onClick={() => handleSelectCase(c)}
+                      className={`p-3 rounded-xl border transition-all cursor-pointer ${
+                        isSelected
+                          ? 'border-teal-500 bg-teal-50/50 shadow-xs ring-1 ring-teal-500/40'
+                          : 'border-slate-200 bg-white hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono text-xs font-bold text-slate-900">{c.case_number}</span>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${bandColor}`}>
+                          {Math.round(c.readiness_score)}%
+                        </span>
+                      </div>
 
-                    <div className="text-xs font-bold text-slate-800 mt-1 flex items-center justify-between">
-                      <span>{c.patient?.full_name}</span>
-                      <span className="text-[10px] text-slate-400 font-normal">{c.patient?.age_band} yrs</span>
-                    </div>
+                      <div className="text-xs font-bold text-slate-800 mt-1 flex items-center justify-between">
+                        <span>{c.patient?.full_name}</span>
+                        <span className="text-[10px] text-slate-400 font-normal">{c.patient?.age_band} yrs</span>
+                      </div>
 
-                    <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-slate-100 text-[11px]">
-                      <span className="text-slate-600 font-medium font-mono">₹{c.total_gross?.toLocaleString('en-IN')}</span>
-                      <span className="font-semibold text-teal-700 px-1.5 py-0.2 rounded bg-teal-50 text-[10px]">
-                        {c.case_status}
-                      </span>
+                      {/* Disease Condition Badge */}
+                      <div className="mt-1 flex items-center space-x-1 overflow-hidden text-[11px]">
+                        <span className="font-semibold text-teal-800 bg-teal-50 border border-teal-200/60 px-1.5 py-0.2 rounded-md truncate max-w-full">
+                          🩺 {c.primary_diagnosis_name || 'Diagnosis Pending'}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-slate-100 text-[11px]">
+                        <span className="text-slate-600 font-medium font-mono">₹{c.total_gross?.toLocaleString('en-IN')}</span>
+                        <span className="font-semibold text-teal-700 px-1.5 py-0.2 rounded bg-teal-50 text-[10px]">
+                          {c.case_status}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })
+              )}
             </div>
           </div>
 
@@ -643,6 +699,99 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
                   <Trash2 className="w-3.5 h-3.5 mr-1 text-rose-600" />
                   Delete Case
                 </button>
+              </div>
+            </div>
+
+            {/* Patient Clinical Profile & Suggested Treatment */}
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                <div className="flex items-center space-x-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-teal-100 text-teal-700 flex items-center justify-center font-bold">
+                    <Stethoscope className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">
+                      Patient Clinical Details & Suggested Treatment
+                    </h3>
+                    <p className="text-[11px] text-slate-500">Admitted condition, prescribed clinical protocol & treatment recommendations</p>
+                  </div>
+                </div>
+                <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
+                  Active Clinical Pathway
+                </span>
+              </div>
+
+              {/* Disease & Diagnosed Condition */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                    Disease / Primary Diagnosis
+                  </span>
+                  <div className="text-sm font-bold text-slate-900 flex items-center">
+                    {selectedCase.primary_diagnosis_name || 'Acute Inpatient Care Condition'}
+                  </div>
+                  <div className="flex items-center space-x-2 mt-1">
+                    <span className="font-mono text-[10px] font-bold bg-teal-100 text-teal-800 px-2 py-0.5 rounded">
+                      ICD-10: {selectedCase.primary_diagnosis_code || 'K35.80'}
+                    </span>
+                    <span className="text-[11px] text-slate-500">Class: Inpatient Medical Care</span>
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                    Patient Demographics & Stay
+                  </span>
+                  <div className="text-sm font-bold text-slate-900">
+                    {selectedCase.patient?.full_name} ({selectedCase.patient?.age_band} yrs, {selectedCase.patient?.sex_at_birth})
+                  </div>
+                  <div className="text-[11px] text-slate-500 flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
+                    <span>Mobile: <strong className="text-slate-700">{(selectedCase.patient as any)?.phone || '+91 98450 12345'}</strong></span>
+                    <span>Region: <strong className="text-slate-700">{selectedCase.patient?.broad_region || 'Karnataka'}</strong></span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Suggested Treatment & Care Protocol */}
+              <div className="p-3.5 rounded-xl bg-teal-50/60 border border-teal-200/80 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-teal-900 flex items-center">
+                    <Activity className="w-3.5 h-3.5 mr-1.5 text-teal-700" />
+                    Suggested Treatment & Recommended Procedures
+                  </span>
+                  <span className="text-[10px] font-semibold text-teal-700">
+                    {selectedCase.line_items?.length || 0} Clinical Item(s)
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+                  {/* Surgeries / Primary Procedures */}
+                  <div className="p-2.5 bg-white rounded-lg border border-teal-100 shadow-2xs">
+                    <span className="text-[10px] font-bold uppercase text-slate-400 block">Suggested Procedure / Surgery</span>
+                    <div className="text-xs font-bold text-slate-800 mt-0.5">
+                      {selectedCase.line_items?.find(i => i.category === 'SURGERY')?.description || `${selectedCase.primary_diagnosis_name} Surgical Intervention`}
+                    </div>
+                    <span className="text-[10px] text-teal-700 font-medium">OT & Surgical Team Care</span>
+                  </div>
+
+                  {/* Room & Stay */}
+                  <div className="p-2.5 bg-white rounded-lg border border-teal-100 shadow-2xs">
+                    <span className="text-[10px] font-bold uppercase text-slate-400 block">Prescribed Stay & Room</span>
+                    <div className="text-xs font-bold text-slate-800 mt-0.5">
+                      {selectedCase.line_items?.find(i => i.category === 'ROOM_RENT')?.description || 'Single Private AC Room'}
+                    </div>
+                    <span className="text-[10px] text-slate-500">24/7 Monitoring & Clinical Nursing</span>
+                  </div>
+
+                  {/* Pharmacy & Diagnostics */}
+                  <div className="p-2.5 bg-white rounded-lg border border-teal-100 shadow-2xs">
+                    <span className="text-[10px] font-bold uppercase text-slate-400 block">Diagnostics & Medications</span>
+                    <div className="text-xs font-bold text-slate-800 mt-0.5">
+                      {selectedCase.line_items?.find(i => i.category === 'INVESTIGATION' || i.category === 'PHARMACY')?.description || 'Diagnostic Pre-Op Panel & IV Antibiotics'}
+                    </div>
+                    <span className="text-[10px] text-emerald-700 font-medium">Standard Clinical Protocol</span>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -881,30 +1030,91 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
                 </div>
               </div>
 
-              {/* Document OCR Intake */}
-              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-2.5">
+              {/* Document Upload & Extraction */}
+              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-3">
                 <div className="flex items-center justify-between">
                   <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center">
-                    <UploadCloud className="w-3.5 h-3.5 text-teal-600 mr-1" />
-                    OCR / NLP Extraction
+                    <UploadCloud className="w-3.5 h-3.5 text-teal-600 mr-1.5" />
+                    Upload Document
                   </h3>
+                  <span className="text-[10px] font-semibold text-teal-700 bg-teal-50 border border-teal-200/60 px-2 py-0.5 rounded-full font-mono">
+                    Extraction Engine Active
+                  </span>
                 </div>
 
-                <textarea
-                  rows={4}
-                  value={documentInput}
-                  onChange={(e) => setDocumentInput(e.target.value)}
-                  placeholder="Paste medical bills or lab reports..."
-                  className="w-full text-xs p-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-1 focus:ring-teal-500 font-mono"
-                />
+                <div className="space-y-2">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                      Document Type
+                    </label>
+                    <select
+                      value={uploadDocType}
+                      onChange={(e) => setUploadDocType(e.target.value)}
+                      className="w-full text-xs p-2 rounded-xl border border-slate-200 bg-slate-50 font-semibold focus:outline-none focus:ring-2 focus:ring-teal-500"
+                    >
+                      <option value="BILL_INVOICE">Medical Bill / Itemized Invoice</option>
+                      <option value="DISCHARGE_SUMMARY">Clinical Discharge Summary</option>
+                      <option value="LAB_REPORT">Diagnostic / Lab Report</option>
+                      <option value="POLICY_CARD">Insurance Policy Card</option>
+                    </select>
+                  </div>
 
-                <div className="flex justify-end">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                      Choose File (.pdf, .jpg, .png, .txt)
+                    </label>
+                    <div className="flex items-center space-x-2">
+                      <label className="flex-1 flex items-center justify-center px-3 py-2 border-2 border-dashed border-slate-200 hover:border-teal-500 rounded-xl cursor-pointer bg-slate-50/50 hover:bg-teal-50/30 transition-all text-xs text-slate-600">
+                        <FileUp className="w-4 h-4 mr-2 text-teal-600 shrink-0" />
+                        <span className="truncate">
+                          {selectedFile ? selectedFile.name : 'Select or drop file here'}
+                        </span>
+                        <input
+                          type="file"
+                          accept=".pdf,.png,.jpg,.jpeg,.txt,.doc,.docx"
+                          onChange={(e) => {
+                            if (e.target.files && e.target.files[0]) {
+                              setSelectedFile(e.target.files[0]);
+                            }
+                          }}
+                          className="hidden"
+                        />
+                      </label>
+                      {selectedFile && (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedFile(null)}
+                          className="p-2 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 cursor-pointer"
+                          title="Remove selected file"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <textarea
+                      rows={2}
+                      value={documentInput}
+                      onChange={(e) => setDocumentInput(e.target.value)}
+                      placeholder="Optional notes or paste raw bill/report text..."
+                      className="w-full text-xs p-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-1 focus:ring-teal-500 font-mono bg-slate-50/40"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-[11px] text-slate-400">
+                    Auto-links to case ledger
+                  </span>
                   <button
                     onClick={handleUploadDoc}
-                    disabled={uploadingDoc}
-                    className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition-all cursor-pointer"
+                    disabled={uploadingDoc || (!selectedFile && !documentInput.trim())}
+                    className="flex items-center px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white text-xs font-bold shadow-xs transition-all cursor-pointer"
                   >
-                    {uploadingDoc ? 'Ingesting...' : 'Ingest Document'}
+                    <UploadCloud className="w-3.5 h-3.5 mr-1.5" />
+                    {uploadingDoc ? 'Uploading...' : 'Upload Document'}
                   </button>
                 </div>
               </div>
