@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Shield, CheckCircle2, AlertTriangle, XCircle, FileText,
-  Clock, ArrowUpRight, Search, Eye, MessageSquare, Plus,
+  Clock, ArrowUpRight, ArrowRight, Search, Eye, MessageSquare, Plus,
   Trash2, Award, CheckSquare, Layers, Building2, Landmark, Send, X,
   FileUp, Sparkles
 } from 'lucide-react';
@@ -447,19 +447,6 @@ export const InsurerDashboard: React.FC = () => {
                         <span>Issue Acknowledgement</span>
                       </button>
                       <button
-                        onClick={() => {
-                          if (caseDetail) {
-                            setSmsBody(`Payer Update [Claim #${selectedClaim.external_reference || selectedClaim.id.slice(0, 8)}]: Authorized ₹${(selectedClaim.covered_amount || selectedClaim.total_claimed || 0).toLocaleString()}. Patient co-pay: ₹${(selectedClaim.patient_payable || 0).toLocaleString()}.`);
-                          }
-                          setSmsModal(true);
-                        }}
-                        className="px-2.5 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-semibold hover:bg-indigo-700 transition-colors cursor-pointer flex items-center space-x-1"
-                        title="Send SMS notification to beneficiary"
-                      >
-                        <MessageSquare className="w-3.5 h-3.5" />
-                        <span>Send SMS</span>
-                      </button>
-                      <button
                         onClick={() => setQueryModal(true)}
                         className="px-2.5 py-1.5 bg-amber-500 text-white rounded-lg text-xs font-semibold hover:bg-amber-600 transition-colors cursor-pointer"
                       >
@@ -478,6 +465,45 @@ export const InsurerDashboard: React.FC = () => {
                         Approve
                       </button>
                     </div>
+                  </div>
+
+                  {/* Linked Policy Details Card */}
+                  <div className="my-4 p-3.5 bg-indigo-50/60 rounded-xl border border-indigo-100 space-y-2">
+                    <div className="flex items-center justify-between text-xs font-bold text-indigo-900">
+                      <span className="flex items-center">
+                        <Shield className="w-3.5 h-3.5 mr-1 text-indigo-600" />
+                        Linked Policy: {caseDetail.policy?.plan_name || 'Star Comprehensive Health Cover'}
+                      </span>
+                      <span className="font-mono text-indigo-700">{caseDetail.policy?.policy_ref || 'POL-STAR-COMP-500K'}</span>
+                    </div>
+                    <div className="grid grid-cols-4 gap-2 text-[11px] text-slate-700 bg-white p-2.5 rounded-lg border border-indigo-100 font-mono text-center">
+                      <div>
+                        <span className="text-[9px] text-slate-400 block font-sans">SUM INSURED</span>
+                        <span className="font-bold text-indigo-900">₹{(caseDetail.policy?.sum_insured || 500000).toLocaleString()}</span>
+                      </div>
+                      <div>
+                        <span className="text-[9px] text-slate-400 block font-sans">ROOM RENT CAP</span>
+                        <span className="font-bold text-slate-800">₹{(caseDetail.policy?.room_rent_cap || 5000).toLocaleString()}/day</span>
+                      </div>
+                      <div>
+                        <span className="text-[9px] text-slate-400 block font-sans">CO-PAY</span>
+                        <span className="font-bold text-amber-700">{caseDetail.policy?.co_pay_pct || 10}%</span>
+                      </div>
+                      <div>
+                        <span className="text-[9px] text-slate-400 block font-sans">DEDUCTIBLE</span>
+                        <span className="font-bold text-slate-800">₹{(caseDetail.policy?.deductible || 5000).toLocaleString()}</span>
+                      </div>
+                    </div>
+                    {caseDetail.policy?.custom_fields && caseDetail.policy.custom_fields.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 pt-1">
+                        {caseDetail.policy.custom_fields.map((f, idx) => (
+                          <span key={idx} className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-white border border-indigo-200 text-indigo-800 flex items-center space-x-1">
+                            <span>{f.field_name}:</span>
+                            <span className="text-teal-700 font-mono">{f.coverage_val}</span>
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   {/* Financial Breakdown */}
@@ -531,8 +557,25 @@ export const InsurerDashboard: React.FC = () => {
                 </div>
               </div>
             ) : (
-              <div className="lg:col-span-7 flex items-center justify-center p-12 bg-white rounded-xl border border-slate-200 text-slate-500 text-xs">
-                Select a claim from the queue to view policy details and issue acknowledgement
+              <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200 p-8 shadow-2xs text-center flex flex-col items-center justify-center space-y-4 min-h-[420px]">
+                <div className="w-16 h-16 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shadow-xs">
+                  <Shield className="w-8 h-8" />
+                </div>
+                <div className="max-w-md">
+                  <h3 className="text-base font-extrabold text-slate-900 tracking-tight">Select a Claim to Review & Acknowledge</h3>
+                  <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                    Click any inbound pre-authorization or claim from the queue to inspect patient details, linked policy rules, coverage waterfall calculations, and issue an official IRDAI NHCX acknowledgement token.
+                  </p>
+                </div>
+                {claims.length > 0 && (
+                  <button
+                    onClick={() => handleSelectClaim(claims[0])}
+                    className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-xs cursor-pointer flex items-center space-x-1.5 transition-all"
+                  >
+                    <span>Inspect First Claim ({claims[0].external_reference || claims[0].case_number})</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                )}
               </div>
             )}
           </div>

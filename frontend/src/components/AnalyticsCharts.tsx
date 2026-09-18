@@ -189,29 +189,46 @@ export const ClaimFunnelChart: React.FC<ClaimFunnelProps> = ({
   submitted,
   approved
 }) => {
+  const safeTotal = total || 1;
+  const readyPct = Math.round((ready / safeTotal) * 100);
+  const submittedPct = Math.round((submitted / safeTotal) * 100);
+  const approvedPct = Math.round((approved / safeTotal) * 100);
+
   const stages = [
-    { label: 'Total Intake', count: total, color: 'bg-slate-700', width: '100%' },
-    { label: 'Structured & Ready', count: ready, color: 'bg-teal-600', width: `${Math.max(20, Math.round((ready / (total || 1)) * 100))}%` },
-    { label: 'Submitted to Gateway', count: submitted, color: 'bg-blue-600', width: `${Math.max(15, Math.round((submitted / (total || 1)) * 100))}%` },
-    { label: 'Payer Approved', count: approved, color: 'bg-emerald-600', width: `${Math.max(10, Math.round((approved / (total || 1)) * 100))}%` }
+    { label: 'Total Intake', count: total, pct: 100, gradient: 'from-slate-700 to-slate-900', textColor: 'text-slate-900' },
+    { label: 'Structured & Ready', count: ready, pct: readyPct, gradient: 'from-teal-500 to-emerald-600', textColor: 'text-teal-700' },
+    { label: 'Submitted to Gateway', count: submitted, pct: submittedPct, gradient: 'from-blue-500 to-indigo-600', textColor: 'text-blue-700' },
+    { label: 'Payer Approved', count: approved, pct: approvedPct, gradient: 'from-emerald-400 to-teal-500', textColor: 'text-emerald-700' }
   ];
 
   return (
-    <div className="space-y-2">
-      {stages.map((stg) => (
-        <div key={stg.label} className="text-xs">
-          <div className="flex items-center justify-between text-[11px] font-semibold text-slate-700 mb-1">
-            <span>{stg.label}</span>
-            <span className="font-mono text-slate-900">{stg.count} cases</span>
+    <div className="space-y-3">
+      <div className="flex items-center justify-between text-[11px] pb-1 border-b border-slate-100">
+        <span className="flex items-center font-bold text-slate-700">
+          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping mr-1.5 inline-block" />
+          Live Real-time Pipeline
+        </span>
+        <span className="font-mono text-slate-400 font-semibold">{total} Active Admissions</span>
+      </div>
+      <div className="space-y-2.5">
+        {stages.map((stg) => (
+          <div key={stg.label} className="text-xs">
+            <div className="flex items-center justify-between text-[11px] font-semibold text-slate-700 mb-1">
+              <span>{stg.label}</span>
+              <div className="flex items-center space-x-1.5 font-mono">
+                <span className={`font-bold ${stg.textColor}`}>{stg.count} cases</span>
+                <span className="text-[10px] text-slate-400">({stg.pct}%)</span>
+              </div>
+            </div>
+            <div className="w-full bg-slate-100 rounded-lg h-3 overflow-hidden p-0.5 border border-slate-200/80">
+              <div
+                className={`h-full rounded-md bg-gradient-to-r ${stg.gradient} transition-all duration-700 shadow-2xs`}
+                style={{ width: `${Math.max(6, stg.pct)}%` }}
+              />
+            </div>
           </div>
-          <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
-            <div
-              className={`h-full rounded-full transition-all duration-700 ${stg.color}`}
-              style={{ width: stg.width }}
-            />
-          </div>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 };

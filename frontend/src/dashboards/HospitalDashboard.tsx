@@ -472,20 +472,6 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
 
         <div className="flex items-center space-x-2">
           <button
-            onClick={() => {
-              if (selectedCase) {
-                setSmsBody(`Hospital Update [Case #${selectedCase.case_number}]: Pre-auth submitted. Estimated patient payable: ₹${(selectedCase.total_patient_payable || 0).toLocaleString()}.`);
-              }
-              setShowSmsModal(true);
-            }}
-            className="flex items-center px-3.5 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs transition-all cursor-pointer"
-            title="Dispatch SMS alert to patient"
-          >
-            <MessageSquare className="w-3.5 h-3.5 mr-1" />
-            Send Patient SMS
-          </button>
-
-          <button
             onClick={() => setShowNewCaseModal(true)}
             className="flex items-center px-3.5 py-1.5 rounded-xl text-xs font-bold bg-teal-600 hover:bg-teal-700 text-white shadow-xs transition-all cursor-pointer"
           >

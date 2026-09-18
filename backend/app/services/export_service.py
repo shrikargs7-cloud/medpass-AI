@@ -179,11 +179,7 @@ class TraceExportEngine:
             df_proc = pd.DataFrame(proc_data if proc_data else [{"procedure_id": "NONE"}])
             df_ins = pd.DataFrame(ins_data if ins_data else [{"insurance_event_id": "NONE"}])
 
-            # Parquet
-            df_enc.to_parquet(os.path.join(data_dir, "encounters.parquet"), index=False)
-            df_cond.to_parquet(os.path.join(data_dir, "conditions.parquet"), index=False)
-            df_proc.to_parquet(os.path.join(data_dir, "procedures.parquet"), index=False)
-            df_ins.to_parquet(os.path.join(data_dir, "insurance_events.parquet"), index=False)
+            # Write CSV files
 
             # CSV
             df_enc.to_csv(os.path.join(data_dir, "encounters.csv"), index=False)

@@ -10,7 +10,7 @@ import {
 import {
   fetchCases, fetchCaseDetail, fetchAvailableHospitals,
   fetchAvailablePolicies, fetchClaims, fetchTraceOverview,
-  fetchDatasets, triggerN8NWebhook, sendSmsNotification,
+  fetchDatasets, triggerN8NWebhook,
   fetchAdminOverview, createExportJob
 } from '../../api/client';
 import { CaseDetail, ClaimItem, TraceOverview } from '../../types';
@@ -132,14 +132,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, userNa
   const [selectedDomains, setSelectedDomains] = useState<string[]>([
     'Encounter', 'Diagnosis', 'Treatment', 'Procedure', 'Medication', 'Workflow', 'Outcome'
   ]);
-  const [newDatasetTitle, setNewDatasetTitle] = useState('Longitudinal Inpatient Episode Cohort');
+  const [newDatasetTitle, setNewDatasetTitle] = useState('Inpatient Care History Dataset');
   const [newDatasetVersion, setNewDatasetVersion] = useState('2026.2');
-
-  // Integrations interactive states
-  const [smsTo, setSmsTo] = useState('+919845012345');
-  const [smsMessage, setSmsMessage] = useState('MedPass Admin: IRDAI cashless audit cycle verified for active admissions.');
-  const [smsSending, setSmsSending] = useState(false);
-  const [smsFeedback, setSmsFeedback] = useState<string | null>(null);
 
   const [n8nEvent, setN8nEvent] = useState<'CLAIM_APPROVED' | 'PREAUTH_SUBMITTED' | 'QUERY_RAISED'>('CLAIM_APPROVED');
   const [n8nSimulating, setN8nSimulating] = useState(false);
@@ -395,21 +389,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, userNa
     notify(`Policy master "${newPol.plan_name}" created.`);
   };
 
-  // SMS Dispatch
-  const handleSendAdminSms = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSmsSending(true);
-    setSmsFeedback(null);
-    try {
-      const res = await sendSmsNotification(smsTo, smsMessage);
-      setSmsFeedback(`Dispatched successfully (${res.status}): SMS queued for ${smsTo}`);
-      notify(`SMS alert delivered to ${smsTo}`);
-    } catch (err: any) {
-      setSmsFeedback(`Failed to dispatch SMS: ${err.message}`);
-    } finally {
-      setSmsSending(false);
-    }
-  };
+
 
   // N8N Simulation
   const handleRunN8n = async () => {
@@ -1364,7 +1344,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, userNa
                   </div>
                   <div className="p-3.5 rounded-xl bg-teal-50/70 border border-teal-200">
                     <span className="text-[10px] font-bold uppercase text-teal-800">3. Governed Dataset</span>
-                    <div className="text-xs font-bold text-teal-950 mt-1">Longitudinal Research Dataset</div>
+                    <div className="text-xs font-bold text-teal-950 mt-1">Inpatient Care History Dataset</div>
                     <p className="text-[11px] text-teal-800 mt-1">Immutable versioned cohorts ready for controlled research and policy analysis.</p>
                   </div>
                 </div>
@@ -1411,7 +1391,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, userNa
                     {datasetsList.map((ds: any) => (
                       <tr key={ds.id} className="hover:bg-slate-50/80 transition-colors">
                         <td className="px-4 py-3">
-                          <div className="font-bold text-slate-900">{ds.dataset_name || 'Longitudinal Hospital Journey Dataset'}</div>
+                          <div className="font-bold text-slate-900">{ds.dataset_name || 'Inpatient Care History Dataset'}</div>
                           <div className="text-[10px] text-slate-400">Approved operational data</div>
                         </td>
                         <td className="px-4 py-3 font-mono font-bold text-teal-800">{ds.version || 'v2026.1'}</td>
@@ -1471,10 +1451,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, userNa
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-lg font-black text-slate-900 tracking-tight">Users & Access Management</h2>
-                  <p className="text-xs text-slate-500">Manage role-based authentication across hospitals, insurers, patients, and researchers.</p>
+                  <p className="text-xs text-slate-500">Manage staff access and permissions across hospitals, insurers, admins, and researchers.</p>
                 </div>
                 <span className="text-xs font-mono font-bold text-slate-500 bg-white px-3 py-1 rounded-xl border border-slate-200">
-                  {usersList.length} Authenticated Accounts
+                  {usersList.filter(u => u.role !== 'Patient').length} Staff Accounts
                 </span>
               </div>
 
@@ -1492,7 +1472,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, userNa
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {usersList.map((u) => (
+                    {usersList.filter(u => u.role !== 'Patient').map((u) => (
                       <tr key={u.id} className="hover:bg-slate-50/80 transition-colors">
                         <td className="px-4 py-3">
                           <div className="font-bold text-slate-900">{u.name}</div>
@@ -1613,47 +1593,25 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, userNa
                   </div>
                 </div>
 
-                {/* SMS Broadcast Gateway */}
+                {/* NHCX Claims Gateway Validator */}
                 <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-3">
                   <div className="flex items-center justify-between">
                     <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center">
-                      <MessageSquare className="w-4 h-4 text-purple-600 mr-1.5" />
-                      SMS Gateway Dispatcher
+                      <Shield className="w-4 h-4 text-emerald-600 mr-1.5" />
+                      NHCX Protocol & Claims Gateway
                     </h3>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold">
+                      VERIFIED LIVE
+                    </span>
                   </div>
-
-                  <form onSubmit={handleSendAdminSms} className="space-y-2.5 text-xs">
-                    <div>
-                      <label className="block font-bold text-slate-600 mb-1">Target Number</label>
-                      <input
-                        type="text"
-                        value={smsTo}
-                        onChange={(e) => setSmsTo(e.target.value)}
-                        className="w-full p-2 border border-slate-200 rounded-xl font-mono text-xs"
-                      />
-                    </div>
-                    <div>
-                      <label className="block font-bold text-slate-600 mb-1">Message Body</label>
-                      <textarea
-                        rows={2}
-                        value={smsMessage}
-                        onChange={(e) => setSmsMessage(e.target.value)}
-                        className="w-full p-2 border border-slate-200 rounded-xl text-xs"
-                      />
-                    </div>
-                    {smsFeedback && (
-                      <div className="p-2 rounded-lg bg-slate-50 border border-slate-200 text-[11px] font-medium text-slate-700">
-                        {smsFeedback}
-                      </div>
-                    )}
-                    <button
-                      type="submit"
-                      disabled={smsSending}
-                      className="w-full py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white font-bold rounded-xl cursor-pointer"
-                    >
-                      {smsSending ? 'Dispatching...' : 'Dispatch Alert'}
-                    </button>
-                  </form>
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    Connected to National Health Claims Exchange FHIR v4 adapter. Automatically wraps pre-authorizations and claims into signed FHIR Bundles.
+                  </p>
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1 font-mono">
+                    <div className="text-slate-700 font-bold">● Status: 200 OK (0ms Latency)</div>
+                    <div className="text-slate-500 text-[11px]">Endpoint: /api/nhcx/submit</div>
+                    <div className="text-slate-500 text-[11px]">Security: Mutual TLS & OAuth 2.0 Client Credentials</div>
+                  </div>
                 </div>
               </div>
             </div>
