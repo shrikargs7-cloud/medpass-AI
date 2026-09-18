@@ -1,55 +1,24 @@
 services:
-  # Backend API Web Service
   - type: web
-    name: medpass-ai-backend
-    runtime: python
-    region: oregon
-    plan: starter
-    buildCommand: "pip install -r backend/requirements.txt"
-    startCommand: "python -m uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT"
-    healthCheckPath: /health
+    name: medpass-backend
+    env: python
+    region: singapore
+    plan: free
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: PYTHON_VERSION
-        value: 3.11.9
-      - key: PORT
-        value: 8000
-      - key: ENVIRONMENT
-        value: production
-      - key: DATABASE_URL
-        fromDatabase:
-          name: medpass-db
-          property: connectionString
-      - key: BEECEPTOR_BASE_URL
-        value: https://medpass-mocks.free.beeceptor.com
-      - key: N8N_WEBHOOK_URL
-        value: https://n8n.workflow.internal/webhook/case-status
-      - key: GEMINI_API_KEY
-        sync: false
-      - key: CORS_ORIGINS
-        value: "*"
+        value: 3.12.14
+      - key: TRACE_PSEUDONYM_SECRET
+        generateValue: true
 
-  # Frontend Static Site
   - type: web
-    name: medpass-ai-frontend
-    runtime: static
-    region: oregon
-    plan: starter
-    buildCommand: "cd frontend && npm install && npm run build"
-    staticPublishPath: frontend/dist
+    name: medpass-frontend
+    env: static
+    plan: free
+    buildCommand: cd frontend && npm ci && npm run build
+    staticPublishPath: ./frontend/dist
     routes:
       - type: rewrite
         source: /*
         destination: /index.html
-    envVars:
-      - key: VITE_API_URL
-        fromService:
-          type: web
-          name: medpass-ai-backend
-          property: host
-
-databases:
-  - name: medpass-db
-    plan: starter
-    region: oregon
-    databaseName: medpass_operational
-    user: medpass_user
