@@ -3,7 +3,9 @@ import {
   CohortPreview, ExportJob, MCPTool
 } from '../types';
 
-const API_BASE = '/api';
+const API_BASE = import.meta.env.VITE_API_URL
+  ? `${import.meta.env.VITE_API_URL.replace(/\/$/, '')}/api`
+  : '/api';
 
 export async function fetchCases(status?: string, band?: string): Promise<CaseDetail[]> {
   const params = new URLSearchParams();
@@ -225,6 +227,12 @@ export async function createExportJob(filters: CohortFilter): Promise<ExportJob>
 export async function fetchExports(): Promise<ExportJob[]> {
   const res = await fetch(`${API_BASE}/trace/exports`);
   if (!res.ok) throw new Error('Failed to fetch exports');
+  return res.json();
+}
+
+export async function fetchDatasets(): Promise<any[]> {
+  const res = await fetch(`${API_BASE}/trace/datasets`);
+  if (!res.ok) throw new Error('Failed to fetch datasets');
   return res.json();
 }
 

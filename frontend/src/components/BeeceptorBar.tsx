@@ -34,7 +34,7 @@ export const BeeceptorBar: React.FC<BeeceptorBarProps> = ({
         <div className="flex items-center space-x-2">
           <span className="flex items-center font-bold uppercase tracking-wider text-[11px] bg-slate-200 text-slate-800 px-2 py-0.5 rounded-md border border-slate-300">
             <Network className="w-3.5 h-3.5 mr-1 text-teal-600" />
-            National Health Exchange (NHCX) / Payer Gateway
+            NHCX-Shaped Payer Gateway (IRDAI Mock Sandbox)
           </span>
           <span className="text-slate-500 hidden sm:inline text-[11px]">Pre-Auth Scenario:</span>
         </div>

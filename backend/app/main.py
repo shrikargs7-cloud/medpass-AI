@@ -1,11 +1,12 @@
 import os
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import text
 
 from backend.app.config import settings
-from backend.app.db import engine, Base
+from backend.app.db import engine, Base, SessionLocal
 import backend.app.models # Registers all SQLAlchemy models
 
 from backend.app.routers.case_routes import router as case_router
@@ -49,12 +50,39 @@ def health_check():
     }
 
 @app.get("/ready", tags=["Health"])
-def readiness_check():
-    return {
-        "status": "ready",
-        "database": "connected",
-        "storage": "writable"
+def readiness_check(response: Response):
+    checks = {
+        "database": "checking",
+        "storage": "checking"
     }
+    healthy = True
+
+    # 1. Test database connectivity
+    try:
+        with SessionLocal() as db:
+            db.execute(text("SELECT 1"))
+        checks["database"] = "connected"
+    except Exception as e:
+        checks["database"] = f"unreachable: {str(e)}"
+        healthy = False
+
+    # 2. Test storage writability
+    try:
+        test_file = os.path.join(settings.EXPORT_DIR, ".probe_test")
+        with open(test_file, "w") as f:
+            f.write("probe")
+        if os.path.exists(test_file):
+            os.remove(test_file)
+        checks["storage"] = "writable"
+    except Exception as e:
+        checks["storage"] = f"unwritable: {str(e)}"
+        healthy = False
+
+    if not healthy:
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+        return {"status": "not_ready", "checks": checks}
+
+    return {"status": "ready", "checks": checks}
 
 # Mount API Routers
 app.include_router(case_router, prefix="/api")

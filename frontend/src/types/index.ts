@@ -135,6 +135,7 @@ export interface CohortFilter {
   diagnosis_codes?: string[];
   procedure_categories?: string[];
   age_bands?: string[];
+  sex_categories?: string[];
   journey_mode: 'whole_journey' | 'event_window';
   format: 'parquet' | 'csv' | 'fhir' | 'omop' | 'all';
 }
@@ -170,3 +171,27 @@ export interface MCPTool {
   description: string;
   parameters: Record<string, any>;
 }
+
+export interface DatasetVersionItem {
+  version_tag: string;
+  status: string;
+  period_start: string;
+  period_end: string;
+  encounter_count: number;
+  event_count: number;
+  facility_count: number;
+  completeness_score: number;
+  privacy_status: string;
+  published_at: string;
+}
+
+export interface DatasetCardItem {
+  id: string;
+  dataset_key: string;
+  title: string;
+  description: string;
+  governance_model: string;
+  active_version: string;
+  versions: DatasetVersionItem[];
+}
+

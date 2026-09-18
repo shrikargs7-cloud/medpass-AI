@@ -80,7 +80,7 @@ def list_datasets(db: Session = Depends(get_db)):
             dataset_key="trace-core",
             title="Trace Commons Core Longitudinal Healthcare Dataset",
             description="Governed, de-identified longitudinal records covering inpatient admissions, ICD-10 diagnoses, surgical procedures, insurance preauthorizations, and discharge blocker journeys.",
-            governance_model="COMMUNITY_OPEN_ACCESS",
+            governance_model="COMMUNITY_GOVERNED_ACCESS",
             active_version="1.3.0"
         )
         db.add(default_ds)
@@ -117,7 +117,7 @@ def get_dataset_quality(dataset_id: str, db: Session = Depends(get_db)):
             "privacy_findings": 0,
             "rules_passed": 12,
             "rules_failed": 0,
-            "engine": "Great Expectations 1.0 + Postgres Constraints"
+            "engine": "Custom Rules Engine + Postgres Constraints"
         }
     return run.quality_report or {
         "passed": run.passed,
@@ -138,7 +138,7 @@ def get_dataset_lineage(dataset_id: str, db: Session = Depends(get_db)):
             {"id": "policy_calc", "name": "Deterministic Policy & Financial Engine", "type": "TRANSFORMATION"},
             {"id": "outbox", "name": "Transactional Event Outbox", "type": "MESSAGE_RELAY"},
             {"id": "privacy_gate", "name": "Multi-layer Privacy Gate (Presidio/Regex/Mask)", "type": "GOVERNANCE_FILTER"},
-            {"id": "quality_validator", "name": "Data Quality Engine (Great Expectations)", "type": "QUALITY_AUDIT"},
+            {"id": "quality_validator", "name": "Data Quality Engine (Custom Rules Engine)", "type": "QUALITY_AUDIT"},
             {"id": "trace_canonical", "name": "Trace Commons Schema", "type": "CANONICAL_STORE"},
             {"id": "duckdb_analytics", "name": "DuckDB Cohort Engine", "type": "ANALYTICAL_QUERY"},
             {"id": "parquet_export", "name": "Governed Parquet / FHIR Research Bundle", "type": "PUBLISHED_DATASET"}

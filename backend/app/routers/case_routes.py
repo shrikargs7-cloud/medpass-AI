@@ -403,11 +403,51 @@ def update_case(case_id: str, payload: CaseUpdate, db: Session = Depends(get_db)
         case.admission_at = payload.admission_at
     if payload.discharge_at is not None:
         case.discharge_at = payload.discharge_at
-    if payload.case_status is not None:
+    # State machine protection: domain workflow validation
+    if payload.case_status is not None and payload.case_status != case.case_status:
+        allowed_case_transitions = {
+            "INTAKE_PENDING": ["INTAKE_COMPLETE"],
+            "INTAKE_COMPLETE": ["READY_FOR_REVIEW", "EVALUATED"],
+            "READY_FOR_REVIEW": ["SUBMITTED_TO_PAYER", "CLOSED"],
+            "SUBMITTED_TO_PAYER": ["ADJUDICATED", "QUERY_PENDING"],
+            "QUERY_PENDING": ["QUERY_RESPONDED", "SUBMITTED_TO_PAYER"],
+            "ADJUDICATED": ["DISCHARGE_READY", "SETTLED"],
+            "DISCHARGE_READY": ["CLOSED"],
+            "SETTLED": ["CLOSED"],
+        }
+        valid_next = allowed_case_transitions.get(case.case_status, [])
+        if payload.case_status not in valid_next:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid case state transition from '{case.case_status}' to '{payload.case_status}'. Transitions must occur through domain actions."
+            )
         case.case_status = payload.case_status
-    if payload.authorization_status is not None:
+
+    if payload.authorization_status is not None and payload.authorization_status != case.authorization_status:
+        allowed_auth_transitions = {
+            "NOT_INITIATED": ["PENDING_SUBMISSION", "SUBMITTED"],
+            "PENDING_SUBMISSION": ["SUBMITTED"],
+            "SUBMITTED": ["IN_REVIEW", "QUERY_RAISED", "APPROVED", "REJECTED"],
+            "QUERY_RAISED": ["QUERY_RESPONDED", "APPROVED", "REJECTED"],
+            "QUERY_RESPONDED": ["APPROVED", "REJECTED"],
+            "APPROVED": ["DISCHARGE_AUTHORIZED"],
+            "REJECTED": ["APPEALED", "CLOSED"],
+        }
+        valid_auth = allowed_auth_transitions.get(case.authorization_status, [])
+        if payload.authorization_status not in valid_auth:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid authorization transition from '{case.authorization_status}' to '{payload.authorization_status}'. Must be transitioned via Insurer Adjudication."
+            )
         case.authorization_status = payload.authorization_status
-    if payload.discharge_status is not None:
+
+    if payload.discharge_status is not None and payload.discharge_status != case.discharge_status:
+        active_blockers = [b for b in (case.blockers or []) if not b.is_resolved and b.severity in ("CRITICAL", "HIGH")]
+        if payload.discharge_status in ("DISCHARGE_READY", "DISCHARGED") and active_blockers:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot transition discharge status to '{payload.discharge_status}' while {len(active_blockers)} active blocker(s) remain unresolved."
+            )
         case.discharge_status = payload.discharge_status
     if payload.policy_id is not None:
         case.policy_id = payload.policy_id
