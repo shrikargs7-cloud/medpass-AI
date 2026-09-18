@@ -1,0 +1,38 @@
+name: Feature Request
+description: Propose a new capability or engine enhancement
+title: "feat: "
+labels: ["enhancement", "area:feature"]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for contributing to MedPass AI + Trace Commons!
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: What operational or research problem does this address?
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: How should this be implemented? Highlight deterministic vs AI boundaries.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: System Area
+      options:
+        - "Policy Engine & Coverage"
+        - "Financial Waterfall Engine"
+        - "Document Intelligence (OCR/NLP)"
+        - "Discharge & Blocker Management"
+        - "Trace Commons & Privacy Gate"
+        - "DuckDB & Parquet Export Engine"
+        - "Beeceptor Mocking & Adapters"
+        - "n8n Automation & Webhooks"
+        - "Frontend Portals"
+    validations:
+      required: true

@@ -1,0 +1,15 @@
+name: Privacy / Data Governance Audit
+description: Flag a potential de-identification gap or governance rule requirement
+title: "privacy: "
+labels: ["privacy", "security", "priority:high"]
+body:
+  - type: markdown
+    attributes:
+      value: Trace Commons Privacy and De-identification Governance Review.
+  - type: textarea
+    id: details
+    attributes:
+      label: De-identification or Quarantine Issue
+      description: Describe the potential quasi-identifier or small-cell risk.
+    validations:
+      required: true

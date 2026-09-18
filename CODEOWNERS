@@ -1,0 +1,22 @@
+# Global Repository Owners
+* @core-team
+
+# Backend Policy Engine & Deterministic Calculations
+/backend/app/services/policy_engine.py @core-team @insurance-lead
+/backend/app/services/calculation_engine.py @core-team @insurance-lead
+/backend/app/services/decision_engine.py @core-team @insurance-lead
+
+# Trace Commons Privacy, De-identification & Governance
+/backend/app/services/privacy_service.py @core-team @privacy-officer
+/backend/app/services/quality_service.py @core-team @data-lead
+/backend/app/services/export_service.py @core-team @data-lead
+/trace/ @core-team @data-lead
+
+# Database Schema & Migrations
+/backend/app/models/ @core-team @database-admin
+/backend/migrations/ @core-team @database-admin
+
+# Infrastructure & CI/CD
+/.github/workflows/ @core-team @devops-lead
+/render.yaml @core-team @devops-lead
+/docker-compose.yml @core-team @devops-lead

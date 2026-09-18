@@ -1,0 +1,22 @@
+name: Bug Report
+description: File a reproducible bug or unexpected calculation behavior
+title: "fix: "
+labels: ["bug", "priority:medium"]
+body:
+  - type: markdown
+    attributes:
+      value: Report a software defect or calculation divergence.
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: Exact input payload or steps taken.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected vs Actual Behavior
+      description: What was the expected calculation or status vs observed?
+    validations:
+      required: true
