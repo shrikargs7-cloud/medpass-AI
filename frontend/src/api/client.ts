@@ -352,3 +352,16 @@ export async function fetchAdminOverview(): Promise<{
   return res.json();
 }
 
+export async function sendSmsApi(to: string, body: string): Promise<{ status: string; sid?: string; message?: string }> {
+  const res = await fetch(`${API_BASE}/sms/send`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ to, body })
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Failed to send SMS' }));
+    throw new Error(err.detail || 'Failed to send SMS');
+  }
+  return res.json();
+}
+

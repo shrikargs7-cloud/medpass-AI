@@ -9,7 +9,7 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword
 } from 'firebase/auth';
-import { fetchCases } from '../api/client';
+import { fetchCases, sendSmsApi } from '../api/client';
 import { CaseDetail } from '../types';
 
 interface LoginDashboardProps {
@@ -268,6 +268,10 @@ export const LoginDashboard: React.FC<LoginDashboardProps> = ({
           const targetCaseId = patientForm.caseId || (cases[0] ? cases[0].id : '');
           const foundCase = cases.find((c) => c.id === targetCaseId);
           const patientName = registered?.name || foundCase?.patient?.full_name || 'Verified Patient';
+
+          // Automatic SMS dispatch on mobile login!
+          const smsBody = `MedPass AI: Hello ${patientName}, welcome! Your medical admission summary for Case #${foundCase?.case_number || 'MED-2026-001'} (${foundCase?.primary_diagnosis_name || 'Inpatient Admission'}) has been loaded. Check your dashboard for cashless coverage details.`;
+          sendSmsApi(cleanPhone, smsBody).catch((err) => console.warn('Auto SMS dispatch note:', err));
 
           onLoginPatient(targetCaseId, patientName);
         }
