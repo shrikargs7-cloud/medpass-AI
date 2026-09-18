@@ -114,9 +114,11 @@ class TraceDataset(Base):
     dataset_key = Column(String(100), unique=True, nullable=False) # e.g. trace-core
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=False)
-    governance_model = Column(String(100), default="COMMUNITY_OPEN_ACCESS")
+    governance_model = Column(String(100), default="COMMUNITY_GOVERNED_ACCESS")
     active_version = Column(String(50), default="1.3.0")
     created_at = Column(DateTime, default=datetime.utcnow)
+
+    versions = relationship("DatasetVersion", backref="dataset", cascade="all, delete-orphan")
 
 class DatasetVersion(Base):
     __tablename__ = "trace_dataset_versions"
