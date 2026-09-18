@@ -1,4 +1,4 @@
-# MedPass AI + Trace Commons
+# MedPass AI
 
 [![CI Pipeline](https://github.com/medpass-ai/medpass-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/medpass-ai/medpass-platform/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
