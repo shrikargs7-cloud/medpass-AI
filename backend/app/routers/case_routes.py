@@ -547,6 +547,7 @@ def create_new_policy(payload: PolicyCreatePayload, db: Session = Depends(get_db
         co_pay_pct=payload.co_pay_pct,
         room_rent_cap=payload.room_rent_cap,
         icu_rent_cap=payload.icu_rent_cap,
+        custom_fields=payload.custom_fields or [],
         effective_from=datetime.utcnow().date(),
         effective_to=datetime.utcnow().date().replace(year=datetime.utcnow().year + 1)
     )

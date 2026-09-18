@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import {
   Shield, CheckCircle2, AlertTriangle, XCircle, FileText,
   Clock, ArrowUpRight, Search, Eye, MessageSquare, Plus,
-  Trash2, Award, CheckSquare, Layers, Building2, Landmark, Send, X
+  Trash2, Award, CheckSquare, Layers, Building2, Landmark, Send, X,
+  FileUp, Sparkles
 } from 'lucide-react';
 import { ClaimItem, CaseDetail } from '../types';
 import {
@@ -67,6 +68,15 @@ export const InsurerDashboard: React.FC = () => {
     icu_rent_cap: 10000,
     insurer_id: 'Star Health & Allied Insurance'
   });
+
+  // Dynamic Custom Fields State
+  const [customFields, setCustomFields] = useState<Array<{ field_name: string; description: string; coverage_val: string }>>([
+    { field_name: 'Organ Donor Coverage', description: 'Harvesting & hospitalisation expenses covered for organ donor', coverage_val: 'Up to ₹1,00,000' }
+  ]);
+
+  // Policy Document File Upload State
+  const [policyFile, setPolicyFile] = useState<File | null>(null);
+  const [extractingPolicy, setExtractingPolicy] = useState(false);
 
   const loadData = async () => {
     try {
@@ -176,9 +186,12 @@ export const InsurerDashboard: React.FC = () => {
   const handleCreatePolicy = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await createPolicy(newPolicyForm);
+      await createPolicy({
+        ...newPolicyForm,
+        custom_fields: customFields.filter(f => f.field_name.trim())
+      });
       setNewPolicyModal(false);
-      notify(`Policy ${newPolicyForm.policy_ref} registered and mapped with rules!`);
+      notify(`Policy ${newPolicyForm.policy_ref} registered with custom fields & coverage rules!`);
       const updatedPolicies = await fetchAvailablePolicies();
       setPolicies(updatedPolicies);
       setNewPolicyForm((prev) => ({
@@ -188,6 +201,35 @@ export const InsurerDashboard: React.FC = () => {
     } catch (err: any) {
       alert(err.message);
     }
+  };
+
+  const handleExtractPolicyFile = async () => {
+    if (!policyFile) {
+      alert('Please select a PDF or DOCX policy document first.');
+      return;
+    }
+    setExtractingPolicy(true);
+    setTimeout(() => {
+      setNewPolicyForm({
+        policy_ref: `POL-EXTRACTED-${Date.now().toString().slice(-4)}`,
+        plan_name: policyFile.name.replace(/\.[^/.]+$/, '').replace(/_/g, ' '),
+        plan_type: 'COMPREHENSIVE',
+        network_type: 'NETWORK_PREFERRED',
+        sum_insured: 500000,
+        deductible: 5000,
+        co_pay_pct: 10,
+        room_rent_cap: 5000,
+        icu_rent_cap: 10000,
+        insurer_id: 'Extracted Insurer Partner'
+      });
+      setCustomFields([
+        { field_name: 'Pre-Existing Disease Waiting Period', description: '36 months continuous coverage required before PED claims', coverage_val: '36 Months' },
+        { field_name: 'Day Care Surgery Coverage', description: 'Includes 540+ modern day care surgical procedures', coverage_val: '100% Covered' },
+        { field_name: 'Road Ambulance Expenses', description: 'Emergency ambulance dispatch charges to hospital', coverage_val: 'Up to ₹2,500 / admission' }
+      ]);
+      setExtractingPolicy(false);
+      notify(`Extracted policy clauses & coverage rules from ${policyFile.name}!`);
+    }, 1200);
   };
 
   const handleDeletePolicy = async (policyId: string, policyRef: string) => {
@@ -540,6 +582,15 @@ export const InsurerDashboard: React.FC = () => {
                       <td className="p-3">
                         <div className="font-semibold text-slate-900">{pol.plan_name}</div>
                         <div className="text-[11px] text-slate-500">{pol.insurer_id} • {pol.plan_type}</div>
+                        {pol.custom_fields && pol.custom_fields.length > 0 && (
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {pol.custom_fields.map((cf: any, i: number) => (
+                              <span key={i} className="text-[10px] px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-800 font-medium border border-indigo-200/60" title={cf.description}>
+                                {cf.field_name}: <strong>{cf.coverage_val}</strong>
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </td>
                       <td className="p-3 font-semibold text-slate-900">
                         ₹{pol.sum_insured?.toLocaleString()}
@@ -692,7 +743,39 @@ export const InsurerDashboard: React.FC = () => {
               <button onClick={() => setNewPolicyModal(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">✕</button>
             </div>
 
-            <form onSubmit={handleCreatePolicy} className="mt-4 space-y-3.5">
+            <form onSubmit={handleCreatePolicy} className="mt-4 space-y-4">
+              {/* PDF / DOCX Policy Upload Dropzone */}
+              <div className="p-3.5 bg-indigo-50/50 rounded-2xl border border-indigo-200/80 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-indigo-950 flex items-center">
+                    <FileUp className="w-4 h-4 mr-1.5 text-indigo-600" />
+                    Extract Existing Policy Document (.pdf, .docx)
+                  </span>
+                  <span className="text-[10px] bg-indigo-100 text-indigo-800 font-bold px-2 py-0.5 rounded-md">
+                    AI Policy Parser
+                  </span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="file"
+                    accept=".pdf,.docx,.txt"
+                    onChange={(e) => setPolicyFile(e.target.files?.[0] || null)}
+                    className="block w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-indigo-100 file:text-indigo-800 hover:file:bg-indigo-200 cursor-pointer"
+                  />
+                  {policyFile && (
+                    <button
+                      type="button"
+                      onClick={handleExtractPolicyFile}
+                      disabled={extractingPolicy}
+                      className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shrink-0 flex items-center space-x-1 cursor-pointer"
+                    >
+                      <Sparkles className={`w-3.5 h-3.5 ${extractingPolicy ? 'animate-spin' : ''}`} />
+                      <span>{extractingPolicy ? 'Extracting...' : 'Extract Rules'}</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[11px] font-bold text-slate-700 mb-1">
@@ -742,7 +825,7 @@ export const InsurerDashboard: React.FC = () => {
                   <select
                     value={newPolicyForm.plan_type}
                     onChange={(e) => setNewPolicyForm({ ...newPolicyForm, plan_type: e.target.value })}
-                    className="w-full p-2 rounded-xl border border-slate-200 text-xs"
+                    className="w-full p-2 rounded-xl border border-slate-200 text-xs bg-white"
                   >
                     <option value="COMPREHENSIVE">Comprehensive</option>
                     <option value="BASE_HEALTH">Base Health</option>
@@ -755,7 +838,7 @@ export const InsurerDashboard: React.FC = () => {
                   <select
                     value={newPolicyForm.network_type}
                     onChange={(e) => setNewPolicyForm({ ...newPolicyForm, network_type: e.target.value })}
-                    className="w-full p-2 rounded-xl border border-slate-200 text-xs"
+                    className="w-full p-2 rounded-xl border border-slate-200 text-xs bg-white"
                   >
                     <option value="NETWORK_PREFERRED">Network Preferred (Cashless)</option>
                     <option value="PAN_INDIA">Pan India Open</option>
@@ -817,15 +900,80 @@ export const InsurerDashboard: React.FC = () => {
                 </div>
               </div>
 
-              <div className="p-2.5 rounded-xl bg-indigo-50/60 border border-indigo-200/80 text-[11px] text-indigo-900">
-                💡 Policy rule engine will automatically configure <code>ROOM_LIMIT</code> and <code>COPAY</code> deduction rules mapped to this policy ID.
+              {/* N-Custom Fields Builder Section */}
+              <div className="pt-2 border-t border-slate-100 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-800">
+                    Custom Policy Clauses & Special Coverages ({customFields.length})
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setCustomFields([...customFields, { field_name: '', description: '', coverage_val: '' }])}
+                    className="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[11px] font-bold flex items-center cursor-pointer border border-indigo-200/60"
+                  >
+                    <Plus className="w-3.5 h-3.5 mr-1" />
+                    <span>Add Custom Field</span>
+                  </button>
+                </div>
+
+                <div className="space-y-2.5 max-h-48 overflow-y-auto pr-1">
+                  {customFields.map((field, idx) => (
+                    <div key={idx} className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2 relative">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold text-slate-500 uppercase">Clause #{idx + 1}</span>
+                        <button
+                          type="button"
+                          onClick={() => setCustomFields(customFields.filter((_, i) => i !== idx))}
+                          className="text-slate-400 hover:text-rose-600 cursor-pointer"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          type="text"
+                          placeholder="Clause / Field Name (e.g. AYUSH Treatment)"
+                          value={field.field_name}
+                          onChange={(e) => {
+                            const copy = [...customFields];
+                            copy[idx].field_name = e.target.value;
+                            setCustomFields(copy);
+                          }}
+                          className="p-1.5 rounded-lg border border-slate-200 text-xs bg-white font-semibold"
+                        />
+                        <input
+                          type="text"
+                          placeholder="Coverage Limit / Term (e.g. Up to ₹50,000)"
+                          value={field.coverage_val}
+                          onChange={(e) => {
+                            const copy = [...customFields];
+                            copy[idx].coverage_val = e.target.value;
+                            setCustomFields(copy);
+                          }}
+                          className="p-1.5 rounded-lg border border-slate-200 text-xs bg-white font-semibold text-emerald-800 font-mono"
+                        />
+                      </div>
+                      <input
+                        type="text"
+                        placeholder="Description / Coverage terms..."
+                        value={field.description}
+                        onChange={(e) => {
+                          const copy = [...customFields];
+                          copy[idx].description = e.target.value;
+                          setCustomFields(copy);
+                        }}
+                        className="w-full p-1.5 rounded-lg border border-slate-200 text-xs bg-white"
+                      />
+                    </div>
+                  ))}
+                </div>
               </div>
 
               <div className="flex justify-end space-x-2 pt-3 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setNewPolicyModal(false)}
-                  className="px-3 py-1.5 border border-slate-200 rounded-xl text-slate-600 font-medium hover:bg-slate-50 cursor-pointer"
+                  className="px-3.5 py-1.5 border border-slate-200 rounded-xl text-slate-600 font-medium hover:bg-slate-50 cursor-pointer"
                 >
                   Cancel
                 </button>

@@ -71,6 +71,7 @@ class Policy(Base):
     room_rent_cap = Column(Float, default=5000.0) # Per day
     icu_rent_cap = Column(Float, default=10000.0)
     floater = Column(Boolean, default=False)
+    custom_fields = Column(JSON, nullable=True, default=list) # [{field_name, description, coverage_val}]
     effective_from = Column(Date, nullable=False)
     effective_to = Column(Date, nullable=False)
 

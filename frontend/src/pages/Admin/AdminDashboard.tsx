@@ -11,7 +11,7 @@ import {
   fetchCases, fetchCaseDetail, fetchAvailableHospitals,
   fetchAvailablePolicies, fetchClaims, fetchTraceOverview,
   fetchDatasets, triggerN8NWebhook, sendSmsNotification,
-  fetchAdminOverview
+  fetchAdminOverview, createExportJob
 } from '../../api/client';
 import { CaseDetail, ClaimItem, TraceOverview } from '../../types';
 
@@ -1430,10 +1430,31 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, userNa
                         <td className="px-4 py-3 text-slate-600">{ds.access_tier || 'Researcher Controlled'}</td>
                         <td className="px-4 py-3 text-right space-x-1.5">
                           <button
-                            onClick={() => notify(`Export initiated for dataset ${ds.dataset_name || 'Dataset'}`)}
-                            className="px-2 py-1 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-700 font-semibold cursor-pointer"
+                            onClick={async () => {
+                              try {
+                                notify(`Generating CSV export for dataset version ${ds.version || 'v2026.1'}...`);
+                                const exportRes = await createExportJob({
+                                  dataset_version: ds.version || 'trace-core-1.3.0',
+                                  facility_keys: [],
+                                  diagnosis_codes: [],
+                                  procedure_categories: [],
+                                  age_bands: [],
+                                  sex_categories: [],
+                                  format: 'csv',
+                                  journey_mode: 'whole_journey'
+                                });
+                                notify(`✓ CSV Dataset Export ready! Downloading ${exportRes.download_url}...`);
+                                if (exportRes.download_url) {
+                                  window.open(exportRes.download_url, '_blank');
+                                }
+                              } catch (err: any) {
+                                alert(err.message || 'Export failed');
+                              }
+                            }}
+                            className="px-2.5 py-1 rounded-lg border border-teal-200 bg-teal-50 hover:bg-teal-100 text-teal-800 font-bold cursor-pointer inline-flex items-center space-x-1"
                           >
-                            Export
+                            <Download className="w-3.5 h-3.5" />
+                            <span>Export .CSV</span>
                           </button>
                         </td>
                       </tr>

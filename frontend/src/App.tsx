@@ -117,21 +117,6 @@ export function App() {
         </Suspense>
       </main>
 
-      {/* Floating Chatbot Launcher Button */}
-      <div className="fixed bottom-6 right-6 z-30">
-        <button
-          onClick={() => setIsMCPOpen(true)}
-          className="group flex items-center space-x-2.5 px-4 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-full shadow-lg shadow-teal-700/20 transition-all hover:scale-105 cursor-pointer"
-          title="Open MedPass AI Healthcare Assistant"
-        >
-          <span className="relative flex h-3 w-3">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-300 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-3 w-3 bg-white"></span>
-          </span>
-          <span className="text-xs font-bold tracking-tight">MedPass AI Assistant</span>
-        </button>
-      </div>
-
       {/* AI Agent (MCP) Slide-over Drawer */}
       <MCPAgentDrawer
         isOpen={isMCPOpen}

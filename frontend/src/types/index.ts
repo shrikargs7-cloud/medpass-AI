@@ -91,6 +91,11 @@ export interface CaseDetail {
     room_rent_cap: number;
     icu_rent_cap: number;
     insurer_id?: string;
+    custom_fields?: Array<{
+      field_name: string;
+      description: string;
+      coverage_val: string;
+    }>;
   };
   created_at: string;
 }

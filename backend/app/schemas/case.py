@@ -118,6 +118,7 @@ class PolicyBriefResponse(BaseModel):
     co_pay_pct: float
     room_rent_cap: float
     icu_rent_cap: float
+    custom_fields: Optional[List[dict]] = []
 
     class Config:
         from_attributes = True
@@ -133,6 +134,7 @@ class PolicyCreatePayload(BaseModel):
     room_rent_cap: float = 5000.0
     icu_rent_cap: float = 10000.0
     insurer_id: Optional[str] = None
+    custom_fields: Optional[List[dict]] = []
 
 class BlockerCreate(BaseModel):
     blocker_type: str
