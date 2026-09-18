@@ -5,7 +5,6 @@ import {
   CheckCircle2, AlertCircle, Globe, Workflow, Play, RefreshCw,
   Clock, Smartphone, Zap, ArrowRight
 } from 'lucide-react';
-import { TraceCommonsDashboard } from '../../dashboards/TraceCommonsDashboard';
 import { triggerN8NWebhook, sendSmsNotification } from '../../api/client';
 
 interface AdminDashboardProps {
@@ -13,7 +12,7 @@ interface AdminDashboardProps {
   userName: string;
 }
 
-type AdminTab = 'overview' | 'trace' | 'workflows' | 'sms' | 'users';
+type AdminTab = 'overview' | 'workflows' | 'sms' | 'users';
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, userName }) => {
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
@@ -88,7 +87,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, userNa
 
   const tabs: { key: AdminTab; label: string; icon: React.ReactNode }[] = [
     { key: 'overview', label: 'Admin Overview', icon: <BarChart3 className="w-4 h-4" /> },
-    { key: 'trace', label: 'Trace Commons Governance', icon: <Database className="w-4 h-4" /> },
     { key: 'workflows', label: 'n8n Workflow Hub', icon: <Workflow className="w-4 h-4" /> },
     { key: 'sms', label: 'SMS Dispatcher', icon: <MessageSquare className="w-4 h-4" /> },
     { key: 'users', label: 'Role & User Management', icon: <Users className="w-4 h-4" /> },
@@ -150,7 +148,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, userNa
               <div>
                 <h2 className="text-2xl font-black text-slate-900 tracking-tight">System Administration & Health</h2>
                 <p className="text-xs text-slate-500 mt-1">
-                  Global overview of decoupled n8n webhooks, Trace Commons research exports, and SMS gateways
+                  Global overview of decoupled n8n webhooks, automated notifications, and SMS gateways
                 </p>
               </div>
               <span className="px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold font-mono flex items-center">
@@ -161,7 +159,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, userNa
 
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
               {[
-                { label: 'Governed Encounters', value: '552', icon: <Database className="w-5 h-5 text-teal-600" />, bg: 'bg-teal-50' },
+                { label: 'Active Admissions', value: '52', icon: <Activity className="w-5 h-5 text-teal-600" />, bg: 'bg-teal-50' },
                 { label: 'n8n Webhook Triggers', value: '1,420', icon: <Workflow className="w-5 h-5 text-indigo-600" />, bg: 'bg-indigo-50' },
                 { label: 'SMS Notifications Sent', value: '3,892', icon: <MessageSquare className="w-5 h-5 text-purple-600" />, bg: 'bg-purple-50' },
                 { label: 'Connected Hospitals', value: '12', icon: <Building2 className="w-5 h-5 text-emerald-600" />, bg: 'bg-emerald-50' },
@@ -185,7 +183,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, userNa
                   {[
                     { action: 'Firebase Auth token issued for patient session (+91 98450 12345)', time: 'Just now', status: 'success' },
                     { action: 'n8n Webhook DISCHARGE_READY dispatched to notification node', time: '8 min ago', status: 'success' },
-                    { action: 'Trace Commons Parquet export completed for Cohort #T-2026', time: '24 min ago', status: 'success' },
+                    { action: 'Pre-auth cashless clearance verified for Case #ROOMCAP-2025', time: '24 min ago', status: 'success' },
                     { action: 'Pre-auth token issued for Star Health claim #CLM-8921', time: '1 hr ago', status: 'success' },
                     { action: 'SMS dispatch queued via Twilio gateway for room cap advisory', time: '2 hrs ago', status: 'info' },
                   ].map((item, i) => (
@@ -210,23 +208,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, userNa
                   Quickly navigate to specialized governance panels or dispatch test events.
                 </p>
 
-                <div className="grid grid-cols-2 gap-3 pt-2">
-                  <button
-                    onClick={() => setActiveTab('trace')}
-                    className="p-3.5 rounded-xl border border-slate-200 hover:border-teal-500 hover:bg-teal-50/50 text-left transition-all cursor-pointer group"
-                  >
-                    <Database className="w-5 h-5 text-teal-600 mb-2 group-hover:scale-110 transition-transform" />
-                    <div className="text-xs font-bold text-slate-800">Trace Commons</div>
-                    <div className="text-[10px] text-slate-500 mt-0.5">Manage 6-step cohort export wizard</div>
-                  </button>
-
+                <div className="grid grid-cols-3 gap-3 pt-2">
                   <button
                     onClick={() => setActiveTab('workflows')}
                     className="p-3.5 rounded-xl border border-slate-200 hover:border-indigo-500 hover:bg-indigo-50/50 text-left transition-all cursor-pointer group"
                   >
                     <Workflow className="w-5 h-5 text-indigo-600 mb-2 group-hover:scale-110 transition-transform" />
                     <div className="text-xs font-bold text-slate-800">n8n Automation</div>
-                    <div className="text-[10px] text-slate-500 mt-0.5">Test event triggers & webhook nodes</div>
+                    <div className="text-[10px] text-slate-500 mt-0.5">Test event triggers & webhooks</div>
                   </button>
 
                   <button
@@ -235,7 +224,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, userNa
                   >
                     <MessageSquare className="w-5 h-5 text-purple-600 mb-2 group-hover:scale-110 transition-transform" />
                     <div className="text-xs font-bold text-slate-800">Broadcast SMS</div>
-                    <div className="text-[10px] text-slate-500 mt-0.5">Send messages to patients or staff</div>
+                    <div className="text-[10px] text-slate-500 mt-0.5">Send messages to patients</div>
                   </button>
 
                   <button
@@ -244,24 +233,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, userNa
                   >
                     <Users className="w-5 h-5 text-emerald-600 mb-2 group-hover:scale-110 transition-transform" />
                     <div className="text-xs font-bold text-slate-800">User Directory</div>
-                    <div className="text-[10px] text-slate-500 mt-0.5">Inspect Firebase authenticated roles</div>
+                    <div className="text-[10px] text-slate-500 mt-0.5">Inspect authenticated roles</div>
                   </button>
                 </div>
               </div>
             </div>
-          </div>
-        )}
-
-        {/* ================= TRACE COMMONS TAB ================= */}
-        {activeTab === 'trace' && (
-          <div className="p-6">
-            <div className="mb-4 bg-teal-50 border border-teal-200 p-4 rounded-xl flex items-center justify-between">
-              <div>
-                <span className="text-xs font-bold text-teal-900 uppercase tracking-wider font-mono">Governed Admin Access</span>
-                <p className="text-xs text-teal-700 mt-0.5">Trace Commons dataset catalog, cohort explorer, and 6-step export wizard are fully enabled in this console.</p>
-              </div>
-            </div>
-            <TraceCommonsDashboard />
           </div>
         )}
 

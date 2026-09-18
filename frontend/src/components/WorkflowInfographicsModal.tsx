@@ -499,9 +499,9 @@ export const WorkflowInfographicsModal: React.FC<WorkflowInfographicsModalProps>
                 </div>
 
                 <div className="p-3.5 rounded-xl bg-white border border-slate-200 shadow-2xs">
-                  <div className="font-bold text-slate-900">5. Trace Commons Export</div>
+                  <div className="font-bold text-slate-900">5. Payer Reconciliation Ledger</div>
                   <p className="text-[11px] text-slate-500 mt-1">
-                    Anonymized encounter streamed to DuckDB for Parquet/OMOP research bundle.
+                    Audited settlement transaction logged to ledger for final bank payment clearance.
                   </p>
                 </div>
               </div>

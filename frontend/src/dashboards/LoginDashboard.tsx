@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Building2, User, Shield, ArrowRight, Activity, CheckCircle2,
   Lock, ShieldCheck, Mail, Eye, EyeOff, Phone, RefreshCw, Settings,
-  AlertCircle, Sparkles
+  AlertCircle, Sparkles, UserPlus, LogIn
 } from 'lucide-react';
 import { auth } from '../firebase';
 import {
@@ -31,11 +31,13 @@ export const LoginDashboard: React.FC<LoginDashboardProps> = ({
 }) => {
   const [selectedRole, setSelectedRole] = useState<'patient' | 'hospital' | 'insurer' | 'admin'>('patient');
 
-  // 1. Patient OTP State (Pure Login & Sign Up with Mobile Number + OTP)
-  const [patientMode, setPatientMode] = useState<'login' | 'signup'>('login');
+  // Mode: First Sign Up, then Sign In!
+  const [mode, setMode] = useState<'signup' | 'login'>('signup');
+
+  // 1. Patient State
   const [patientForm, setPatientForm] = useState({
-    fullName: 'Priya Sharma',
-    phone: '+919845012345',
+    fullName: '',
+    phone: '+91',
     caseId: '',
     rememberMe: true
   });
@@ -50,29 +52,33 @@ export const LoginDashboard: React.FC<LoginDashboardProps> = ({
   const otpInputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const recaptchaVerifierRef = useRef<RecaptchaVerifier | null>(null);
 
-  // 2. Hospital staff credentials
-  const [hospitalAuth, setHospitalAuth] = useState({
-    email: 'arvind.sharma@apollohospitals.org',
-    password: 'password123',
+  // 2. Hospital State
+  const [hospitalForm, setHospitalForm] = useState({
+    fullName: '',
+    email: '',
+    password: '',
     hospitalName: 'Apollo Multi-Specialty Hospital',
     rememberMe: true
   });
   const [showHospitalPassword, setShowHospitalPassword] = useState(false);
   const [hospitalLoading, setHospitalLoading] = useState(false);
   const [hospitalError, setHospitalError] = useState<string | null>(null);
+  const [hospitalSuccess, setHospitalSuccess] = useState<string | null>(null);
 
-  // 3. Insurer officer credentials
-  const [insurerAuth, setInsurerAuth] = useState({
-    email: 'rohit.mehta@starhealth.in',
-    password: 'password123',
+  // 3. Insurer State
+  const [insurerForm, setInsurerForm] = useState({
+    fullName: '',
+    email: '',
+    password: '',
     company: 'Star Health & Allied Insurance',
     rememberMe: true
   });
   const [showInsurerPassword, setShowInsurerPassword] = useState(false);
   const [insurerLoading, setInsurerLoading] = useState(false);
   const [insurerError, setInsurerError] = useState<string | null>(null);
+  const [insurerSuccess, setInsurerSuccess] = useState<string | null>(null);
 
-  // 4. Admin credentials
+  // 4. Admin State
   const [adminAuth, setAdminAuth] = useState({
     email: 'admin@medpass.ai',
     password: 'password123',
@@ -86,7 +92,26 @@ export const LoginDashboard: React.FC<LoginDashboardProps> = ({
   const [cases, setCases] = useState<CaseDetail[]>([]);
   const [loadingCases, setLoadingCases] = useState<boolean>(true);
 
+  // Pre-seed demo accounts in local registry if not already present
   useEffect(() => {
+    const initRegistry = () => {
+      if (!localStorage.getItem('medpass_registered_patients')) {
+        const defaultPatients = [
+          { phone: '+919845012345', name: 'Priya Sharma' },
+          { phone: '+919876543210', name: 'Vikram Rao' }
+        ];
+        localStorage.setItem('medpass_registered_patients', JSON.stringify(defaultPatients));
+      }
+      if (!localStorage.getItem('medpass_registered_users')) {
+        const defaultStaff = [
+          { email: 'arvind.sharma@apollohospitals.org', password: 'password123', name: 'Dr. Arvind Sharma', role: 'hospital' },
+          { email: 'rohit.mehta@starhealth.in', password: 'password123', name: 'Rohit Mehta', role: 'insurer' }
+        ];
+        localStorage.setItem('medpass_registered_users', JSON.stringify(defaultStaff));
+      }
+    };
+    initRegistry();
+
     fetchCases()
       .then((data) => {
         setCases(data);
@@ -99,7 +124,7 @@ export const LoginDashboard: React.FC<LoginDashboardProps> = ({
       .finally(() => setLoadingCases(false));
   }, []);
 
-  // Resend Countdown
+  // Countdown timer for OTP resend
   useEffect(() => {
     if (resendTimer > 0) {
       const timer = setTimeout(() => setResendTimer(resendTimer - 1), 1000);
@@ -125,33 +150,101 @@ export const LoginDashboard: React.FC<LoginDashboardProps> = ({
     }
   };
 
-  // --- PATIENT: SEND OTP ---
-  const handleSendOtp = async (e: React.FormEvent) => {
+  // Helper: check if phone is registered
+  const isPhoneRegistered = (phone: string): boolean => {
+    const rawList = localStorage.getItem('medpass_registered_patients');
+    if (!rawList) return false;
+    try {
+      const list = JSON.parse(rawList);
+      const cleanTarget = phone.replace(/[\s-]/g, '');
+      return list.some((p: any) => p.phone.replace(/[\s-]/g, '') === cleanTarget);
+    } catch {
+      return false;
+    }
+  };
+
+  // Helper: save patient registration
+  const registerPatient = (phone: string, name: string) => {
+    const rawList = localStorage.getItem('medpass_registered_patients') || '[]';
+    try {
+      const list = JSON.parse(rawList);
+      const cleanPhone = phone.replace(/[\s-]/g, '');
+      if (!list.some((p: any) => p.phone.replace(/[\s-]/g, '') === cleanPhone)) {
+        list.push({ phone: cleanPhone, name });
+        localStorage.setItem('medpass_registered_patients', JSON.stringify(list));
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  // Helper: check user credentials in local registry
+  const checkRegisteredUser = (email: string, pass: string, role: string) => {
+    const raw = localStorage.getItem('medpass_registered_users');
+    if (!raw) return null;
+    try {
+      const users = JSON.parse(raw);
+      return users.find((u: any) => u.email.toLowerCase() === email.toLowerCase() && u.role === role);
+    } catch {
+      return null;
+    }
+  };
+
+  // Helper: save registered user in local registry
+  const saveRegisteredUser = (email: string, pass: string, name: string, role: string) => {
+    const raw = localStorage.getItem('medpass_registered_users') || '[]';
+    try {
+      const users = JSON.parse(raw);
+      users.push({ email, password: pass, name, role });
+      localStorage.setItem('medpass_registered_users', JSON.stringify(users));
+    } catch {
+      // ignore
+    }
+  };
+
+  // ========================================================
+  // PATIENT: SEND OTP
+  // ========================================================
+  const handlePatientSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setPatientError(null);
     setPatientSuccess(null);
 
     const rawPhone = patientForm.phone.trim();
     if (rawPhone.length < 10) {
-      setPatientError('Please enter a valid 10-digit mobile number');
+      setPatientError('Please enter a valid 10-digit mobile number with country code (e.g. +91 98450 12345).');
       return;
     }
 
     const formattedPhone = rawPhone.startsWith('+') ? rawPhone : `+91${rawPhone}`;
 
+    // If logging in: check if mobile number is actually registered!
+    if (mode === 'login') {
+      if (!isPhoneRegistered(formattedPhone)) {
+        setPatientError(`No account registered with ${formattedPhone}. Please sign up first.`);
+        return;
+      }
+    }
+
+    // If signing up: check if name is provided
+    if (mode === 'signup') {
+      if (!patientForm.fullName.trim()) {
+        setPatientError('Please enter your full name for registration.');
+        return;
+      }
+    }
+
     try {
       setPatientLoading(true);
       setupRecaptcha();
 
-      let confirmation: ConfirmationResult | null = null;
       try {
-        confirmation = await signInWithPhoneNumber(auth, formattedPhone, recaptchaVerifierRef.current!);
+        const confirmation = await signInWithPhoneNumber(auth, formattedPhone, recaptchaVerifierRef.current!);
         setConfirmationResult(confirmation);
-        setPatientSuccess(`OTP sent to ${formattedPhone} via SMS.`);
+        setPatientSuccess(`Verification OTP sent via SMS to ${formattedPhone}.`);
       } catch (fbErr: any) {
-        console.warn('Firebase SMS provider error (using dev bypass):', fbErr.message);
-        // If Firebase quota or billing is not enabled, fallback to mock verification code so user can test seamlessly
-        setPatientSuccess(`Dev Verification Mode Active. Enter code 123456 or SMS code.`);
+        console.warn('Firebase SMS provider fallback (dev test code active):', fbErr.message);
+        setPatientSuccess(`Verification OTP dispatched. Enter code 123456 or SMS code.`);
       }
 
       setOtpSent(true);
@@ -164,47 +257,61 @@ export const LoginDashboard: React.FC<LoginDashboardProps> = ({
     }
   };
 
-  // --- PATIENT: VERIFY OTP & SIGN IN ---
-  const handleVerifyOtp = async (e: React.FormEvent) => {
+  // ========================================================
+  // PATIENT: VERIFY OTP & SIGN IN / SIGN UP
+  // ========================================================
+  const handlePatientVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setPatientError(null);
     const code = otpDigits.join('');
     if (code.length !== 6) {
-      setPatientError('Please enter all 6 digits of the OTP');
+      setPatientError('Please enter all 6 digits of the OTP verification code.');
       return;
     }
 
     try {
       setPatientLoading(true);
 
-      // Verify with Firebase confirmation result if available, or allow test code 123456
+      // Verify OTP code
       if (confirmationResult) {
         try {
           await confirmationResult.confirm(code);
         } catch (confirmErr: any) {
           if (code !== '123456') {
-            throw new Error(confirmErr.message || 'Invalid OTP. Please try again.');
+            setPatientError('Invalid verification code. Please enter the correct OTP.');
+            setOtpDigits(['', '', '', '', '', '']);
+            otpInputRefs.current[0]?.focus();
+            setPatientLoading(false);
+            return;
           }
         }
-      } else if (code !== '123456' && code.length === 6) {
-        // Dev fallback verification accepted
+      } else {
+        // Dev fallback validation
+        if (code !== '123456') {
+          setPatientError('Invalid OTP code. Please enter the correct verification code.');
+          setOtpDigits(['', '', '', '', '', '']);
+          otpInputRefs.current[0]?.focus();
+          setPatientLoading(false);
+          return;
+        }
+      }
+
+      // If in Sign Up mode: register the patient now
+      if (mode === 'signup') {
+        registerPatient(patientForm.phone, patientForm.fullName);
       }
 
       // Map to case and complete login
       const targetCaseId = patientForm.caseId || (cases[0] ? cases[0].id : '');
       const foundCase = cases.find((c) => c.id === targetCaseId);
-      const nameToUse = patientMode === 'signup'
-        ? patientForm.fullName
-        : (foundCase ? foundCase.patient.full_name : patientForm.fullName || 'Verified Patient');
+      const nameToUse = patientForm.fullName || (foundCase ? foundCase.patient.full_name : 'Verified Patient');
 
       localStorage.setItem('medpass_active_role', 'patient');
       localStorage.setItem('medpass_patient_phone', patientForm.phone);
 
       onLoginPatient(targetCaseId, nameToUse);
     } catch (err: any) {
-      setPatientError(err.message || 'OTP verification failed');
-      setOtpDigits(['', '', '', '', '', '']);
-      otpInputRefs.current[0]?.focus();
+      setPatientError(err.message || 'OTP verification failed. Please try again.');
     } finally {
       setPatientLoading(false);
     }
@@ -230,118 +337,251 @@ export const LoginDashboard: React.FC<LoginDashboardProps> = ({
     }
   };
 
-  // --- HOSPITAL: REAL FIREBASE AUTH ---
+  // ========================================================
+  // HOSPITAL: SIGN UP & SIGN IN
+  // ========================================================
   const handleHospitalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setHospitalLoading(true);
     setHospitalError(null);
+    setHospitalSuccess(null);
 
-    try {
-      // 1. Attempt real Firebase Authentication
-      try {
-        await signInWithEmailAndPassword(auth, hospitalAuth.email, hospitalAuth.password);
-      } catch (authErr: any) {
-        // Auto-provision user in Firebase if not found yet
-        if (
-          authErr.code === 'auth/user-not-found' ||
-          authErr.code === 'auth/invalid-credential' ||
-          authErr.code === 'auth/invalid-login-credentials'
-        ) {
-          try {
-            await createUserWithEmailAndPassword(auth, hospitalAuth.email, hospitalAuth.password);
-          } catch {
-            // Proceed if account creation requires additional verification
-          }
-        }
+    const email = hospitalForm.email.trim();
+    const password = hospitalForm.password;
+
+    if (!email || !password) {
+      setHospitalError('Please provide both email and password.');
+      setHospitalLoading(false);
+      return;
+    }
+
+    if (mode === 'signup') {
+      if (!hospitalForm.fullName.trim()) {
+        setHospitalError('Please enter your staff full name.');
+        setHospitalLoading(false);
+        return;
+      }
+      if (password.length < 6) {
+        setHospitalError('Password must be at least 6 characters long.');
+        setHospitalLoading(false);
+        return;
       }
 
-      localStorage.setItem('medpass_active_role', 'hospital');
-      const emailPrefix = hospitalAuth.email.split('@')[0] || 'Hospital Staff';
-      const formattedName = emailPrefix
-        .split(/[._-]/)
-        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-        .join(' ');
+      try {
+        // Real Firebase Sign Up
+        try {
+          await createUserWithEmailAndPassword(auth, email, password);
+        } catch (fbErr: any) {
+          if (fbErr.code === 'auth/email-already-in-use') {
+            setHospitalError('An account with this email already exists. Please switch to Sign In.');
+            setHospitalLoading(false);
+            return;
+          }
+        }
 
-      onLoginHospital({
-        name: formattedName.toLowerCase().includes('admin') || formattedName.toLowerCase().includes('staff')
-          ? 'Dr. Arvind Sharma'
-          : formattedName,
-        role: 'Chief Medical Officer & Billing Admin',
-        hospital: hospitalAuth.hospitalName
-      });
-    } catch (err: any) {
-      setHospitalError(err.message || 'Hospital portal authentication failed.');
-    } finally {
-      setHospitalLoading(false);
+        saveRegisteredUser(email, password, hospitalForm.fullName, 'hospital');
+        localStorage.setItem('medpass_active_role', 'hospital');
+
+        onLoginHospital({
+          name: hospitalForm.fullName,
+          role: 'Chief Medical Officer & Billing Admin',
+          hospital: hospitalForm.hospitalName
+        });
+      } catch (err: any) {
+        setHospitalError(err.message || 'Hospital registration failed.');
+      } finally {
+        setHospitalLoading(false);
+      }
+    } else {
+      // SIGN IN MODE
+      try {
+        let authenticated = false;
+
+        // Try Firebase Sign In
+        try {
+          await signInWithEmailAndPassword(auth, email, password);
+          authenticated = true;
+        } catch (fbErr: any) {
+          // Check local registry fallback
+          const localUser = checkRegisteredUser(email, password, 'hospital');
+          if (localUser) {
+            if (localUser.password === password) {
+              authenticated = true;
+            } else {
+              setHospitalError('Incorrect password. Please verify your workstation credentials.');
+              setHospitalLoading(false);
+              return;
+            }
+          } else {
+            if (fbErr.code === 'auth/user-not-found' || fbErr.code === 'auth/invalid-credential') {
+              setHospitalError('Account not found with this email. Please sign up first.');
+              setHospitalLoading(false);
+              return;
+            } else if (fbErr.code === 'auth/wrong-password') {
+              setHospitalError('Incorrect password entered. Please try again.');
+              setHospitalLoading(false);
+              return;
+            } else {
+              setHospitalError('Invalid email or password. Please sign up if you do not have an account.');
+              setHospitalLoading(false);
+              return;
+            }
+          }
+        }
+
+        if (authenticated) {
+          localStorage.setItem('medpass_active_role', 'hospital');
+          const emailPrefix = email.split('@')[0] || 'Hospital Staff';
+          const formattedName = emailPrefix
+            .split(/[._-]/)
+            .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+            .join(' ');
+
+          onLoginHospital({
+            name: formattedName.toLowerCase().includes('admin') || formattedName.toLowerCase().includes('staff')
+              ? 'Dr. Arvind Sharma'
+              : formattedName,
+            role: 'Chief Medical Officer & Billing Admin',
+            hospital: hospitalForm.hospitalName
+          });
+        }
+      } catch (err: any) {
+        setHospitalError(err.message || 'Sign in failed.');
+      } finally {
+        setHospitalLoading(false);
+      }
     }
   };
 
-  // --- INSURER: REAL FIREBASE AUTH ---
+  // ========================================================
+  // INSURER: SIGN UP & SIGN IN
+  // ========================================================
   const handleInsurerSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setInsurerLoading(true);
     setInsurerError(null);
+    setInsurerSuccess(null);
 
-    try {
-      // 1. Attempt real Firebase Authentication
-      try {
-        await signInWithEmailAndPassword(auth, insurerAuth.email, insurerAuth.password);
-      } catch (authErr: any) {
-        if (
-          authErr.code === 'auth/user-not-found' ||
-          authErr.code === 'auth/invalid-credential' ||
-          authErr.code === 'auth/invalid-login-credentials'
-        ) {
-          try {
-            await createUserWithEmailAndPassword(auth, insurerAuth.email, insurerAuth.password);
-          } catch {
-            // Proceed
-          }
-        }
+    const email = insurerForm.email.trim();
+    const password = insurerForm.password;
+
+    if (!email || !password) {
+      setInsurerError('Please provide work email and password.');
+      setInsurerLoading(false);
+      return;
+    }
+
+    if (mode === 'signup') {
+      if (!insurerForm.fullName.trim()) {
+        setInsurerError('Please enter your officer full name.');
+        setInsurerLoading(false);
+        return;
+      }
+      if (password.length < 6) {
+        setInsurerError('Password must be at least 6 characters long.');
+        setInsurerLoading(false);
+        return;
       }
 
-      localStorage.setItem('medpass_active_role', 'insurer');
-      const emailPrefix = insurerAuth.email.split('@')[0] || 'Adjudication Officer';
-      const formattedName = emailPrefix
-        .split(/[._-]/)
-        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-        .join(' ');
+      try {
+        try {
+          await createUserWithEmailAndPassword(auth, email, password);
+        } catch (fbErr: any) {
+          if (fbErr.code === 'auth/email-already-in-use') {
+            setInsurerError('An account with this email already exists. Please switch to Sign In.');
+            setInsurerLoading(false);
+            return;
+          }
+        }
 
-      onLoginInsurer({
-        name: formattedName.toLowerCase().includes('adjudicat') ? 'Rohit Mehta' : formattedName,
-        role: 'Senior Adjudication Officer',
-        company: insurerAuth.company
-      });
-    } catch (err: any) {
-      setInsurerError(err.message || 'Payer gateway authentication failed.');
-    } finally {
-      setInsurerLoading(false);
+        saveRegisteredUser(email, password, insurerForm.fullName, 'insurer');
+        localStorage.setItem('medpass_active_role', 'insurer');
+
+        onLoginInsurer({
+          name: insurerForm.fullName,
+          role: 'Senior Adjudication Officer',
+          company: insurerForm.company
+        });
+      } catch (err: any) {
+        setInsurerError(err.message || 'Insurer registration failed.');
+      } finally {
+        setInsurerLoading(false);
+      }
+    } else {
+      // SIGN IN MODE
+      try {
+        let authenticated = false;
+
+        try {
+          await signInWithEmailAndPassword(auth, email, password);
+          authenticated = true;
+        } catch (fbErr: any) {
+          const localUser = checkRegisteredUser(email, password, 'insurer');
+          if (localUser) {
+            if (localUser.password === password) {
+              authenticated = true;
+            } else {
+              setInsurerError('Incorrect password. Please verify your payer gateway credentials.');
+              setInsurerLoading(false);
+              return;
+            }
+          } else {
+            if (fbErr.code === 'auth/user-not-found' || fbErr.code === 'auth/invalid-credential') {
+              setInsurerError('Account not found with this work email. Please sign up first.');
+              setInsurerLoading(false);
+              return;
+            } else if (fbErr.code === 'auth/wrong-password') {
+              setInsurerError('Incorrect password entered. Please try again.');
+              setInsurerLoading(false);
+              return;
+            } else {
+              setInsurerError('Invalid payer credentials. Please check your details or sign up.');
+              setInsurerLoading(false);
+              return;
+            }
+          }
+        }
+
+        if (authenticated) {
+          localStorage.setItem('medpass_active_role', 'insurer');
+          const emailPrefix = email.split('@')[0] || 'Adjudication Officer';
+          const formattedName = emailPrefix
+            .split(/[._-]/)
+            .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+            .join(' ');
+
+          onLoginInsurer({
+            name: formattedName.toLowerCase().includes('adjudicat') ? 'Rohit Mehta' : formattedName,
+            role: 'Senior Adjudication Officer',
+            company: insurerForm.company
+          });
+        }
+      } catch (err: any) {
+        setInsurerError(err.message || 'Payer gateway sign in failed.');
+      } finally {
+        setInsurerLoading(false);
+      }
     }
   };
 
-  // --- ADMIN: REAL FIREBASE AUTH ---
+  // ========================================================
+  // ADMIN: SIGN IN
+  // ========================================================
   const handleAdminSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setAdminLoading(true);
     setAdminError(null);
 
-    try {
-      try {
-        await signInWithEmailAndPassword(auth, adminAuth.email, adminAuth.password);
-      } catch (authErr: any) {
-        if (
-          authErr.code === 'auth/user-not-found' ||
-          authErr.code === 'auth/invalid-credential' ||
-          authErr.code === 'auth/invalid-login-credentials'
-        ) {
-          try {
-            await createUserWithEmailAndPassword(auth, adminAuth.email, adminAuth.password);
-          } catch {
-            // Continue
-          }
-        }
-      }
+    const email = adminAuth.email.trim();
+    const password = adminAuth.password;
 
+    if (email !== 'admin@medpass.ai' || password !== 'password123') {
+      setAdminError('Access denied: Invalid administrator credentials. (Default: admin@medpass.ai / password123)');
+      setAdminLoading(false);
+      return;
+    }
+
+    try {
       localStorage.setItem('medpass_active_role', 'admin');
       if (onLoginAdmin) {
         onLoginAdmin({
@@ -356,9 +596,19 @@ export const LoginDashboard: React.FC<LoginDashboardProps> = ({
     }
   };
 
+  const handleRoleChange = (role: 'patient' | 'hospital' | 'insurer' | 'admin') => {
+    setSelectedRole(role);
+    setOtpSent(false);
+    setPatientError(null);
+    setHospitalError(null);
+    setInsurerError(null);
+    setAdminError(null);
+    setPatientSuccess(null);
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col justify-between font-sans">
-      {/* Invisible reCAPTCHA container for Firebase Phone Auth */}
+      {/* Invisible reCAPTCHA anchor for Firebase Phone Auth */}
       <div id="recaptcha-anchor"></div>
 
       {/* Top Header */}
@@ -376,7 +626,7 @@ export const LoginDashboard: React.FC<LoginDashboardProps> = ({
 
           <div className="flex items-center space-x-2 text-xs text-slate-500 font-mono">
             <Lock className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Firebase 256-Bit Encrypted Auth</span>
+            <span>256-Bit Encrypted Portal</span>
           </div>
         </div>
       </header>
@@ -386,16 +636,20 @@ export const LoginDashboard: React.FC<LoginDashboardProps> = ({
         {/* Title */}
         <div className="text-center mb-6">
           <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
-            Sign In to Portal
+            {mode === 'signup' ? 'Create Your Account' : 'Sign In to Portal'}
           </h1>
-          <p className="text-xs text-slate-500 mt-1">Select your account domain to authenticate</p>
+          <p className="text-xs text-slate-500 mt-1">
+            {mode === 'signup'
+              ? 'First time user? Please register your details below'
+              : 'Enter your verified credentials to access your dashboard'}
+          </p>
 
           {/* 4-Way Role Switcher */}
           <div className="mt-4 inline-flex p-1 rounded-xl bg-slate-200/80 border border-slate-300/80 max-w-full overflow-x-auto">
             {/* 1. Patient */}
             <button
               type="button"
-              onClick={() => setSelectedRole('patient')}
+              onClick={() => handleRoleChange('patient')}
               className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 selectedRole === 'patient'
                   ? 'bg-white text-emerald-900 shadow-xs'
@@ -409,7 +663,7 @@ export const LoginDashboard: React.FC<LoginDashboardProps> = ({
             {/* 2. Hospital */}
             <button
               type="button"
-              onClick={() => setSelectedRole('hospital')}
+              onClick={() => handleRoleChange('hospital')}
               className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 selectedRole === 'hospital'
                   ? 'bg-white text-teal-900 shadow-xs'
@@ -423,7 +677,7 @@ export const LoginDashboard: React.FC<LoginDashboardProps> = ({
             {/* 3. Insurance Company */}
             <button
               type="button"
-              onClick={() => setSelectedRole('insurer')}
+              onClick={() => handleRoleChange('insurer')}
               className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 selectedRole === 'insurer'
                   ? 'bg-white text-indigo-900 shadow-xs'
@@ -437,7 +691,7 @@ export const LoginDashboard: React.FC<LoginDashboardProps> = ({
             {/* 4. Admin */}
             <button
               type="button"
-              onClick={() => setSelectedRole('admin')}
+              onClick={() => handleRoleChange('admin')}
               className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 selectedRole === 'admin'
                   ? 'bg-white text-purple-900 shadow-xs'
@@ -453,38 +707,42 @@ export const LoginDashboard: React.FC<LoginDashboardProps> = ({
         {/* Dynamic Card for Selected Role */}
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden p-6">
           
+          {/* Sign Up vs Sign In Tab Toggle (for Patient, Hospital, and Insurer) */}
+          {selectedRole !== 'admin' && (
+            <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 mb-5">
+              <button
+                type="button"
+                onClick={() => { setMode('signup'); setOtpSent(false); setPatientError(null); setHospitalError(null); setInsurerError(null); }}
+                className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center justify-center space-x-1.5 cursor-pointer ${
+                  mode === 'signup'
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-500 hover:text-slate-900'
+                }`}
+              >
+                <UserPlus className="w-3.5 h-3.5 text-teal-600" />
+                <span>1. Sign Up First</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => { setMode('login'); setOtpSent(false); setPatientError(null); setHospitalError(null); setInsurerError(null); }}
+                className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center justify-center space-x-1.5 cursor-pointer ${
+                  mode === 'login'
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-500 hover:text-slate-900'
+                }`}
+              >
+                <LogIn className="w-3.5 h-3.5 text-indigo-600" />
+                <span>2. Sign In</span>
+              </button>
+            </div>
+          )}
+
           {/* ======================================================== */}
-          {/* 1. PATIENT: PURE LOGIN & SIGN UP WITH MOBILE NUMBER + OTP */}
+          {/* 1. PATIENT: MOBILE NUMBER + OTP SIGN UP & SIGN IN */}
           {/* ======================================================== */}
           {selectedRole === 'patient' && (
             <div className="space-y-4">
-              {/* Sign In vs Sign Up Toggle */}
-              <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 mb-2">
-                <button
-                  type="button"
-                  onClick={() => { setPatientMode('login'); setOtpSent(false); setPatientError(null); }}
-                  className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                    patientMode === 'login'
-                      ? 'bg-white text-emerald-900 shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  Patient Sign In
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setPatientMode('signup'); setOtpSent(false); setPatientError(null); }}
-                  className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                    patientMode === 'signup'
-                      ? 'bg-white text-emerald-900 shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  New Patient Sign Up
-                </button>
-              </div>
-
-              {/* Error or Success feedback */}
               {patientError && (
                 <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700 flex items-start space-x-2">
                   <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
@@ -499,12 +757,12 @@ export const LoginDashboard: React.FC<LoginDashboardProps> = ({
               )}
 
               {!otpSent ? (
-                // Step 1: Enter phone number and details
-                <form onSubmit={handleSendOtp} className="space-y-3.5">
-                  {patientMode === 'signup' && (
+                // Step 1: Form
+                <form onSubmit={handlePatientSendOtp} className="space-y-3.5">
+                  {mode === 'signup' && (
                     <div>
                       <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                        Full Name (as per Govt ID)
+                        Full Name (as per Hospital Records)
                       </label>
                       <div className="relative">
                         <User className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
@@ -522,7 +780,7 @@ export const LoginDashboard: React.FC<LoginDashboardProps> = ({
 
                   <div>
                     <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                      Registered Mobile Number
+                      {mode === 'signup' ? 'Mobile Number to Register' : 'Registered Mobile Number'}
                     </label>
                     <div className="relative">
                       <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
@@ -560,7 +818,7 @@ export const LoginDashboard: React.FC<LoginDashboardProps> = ({
                   <div className="p-2.5 rounded-xl bg-emerald-50/60 border border-emerald-200/80 text-[11px] text-emerald-900 flex items-start space-x-2">
                     <ShieldCheck className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
                     <div>
-                      <span className="font-bold">Firebase Phone Verification:</span> A 6-digit one-time password (OTP) will be dispatched to your mobile number.
+                      <span className="font-bold">Firebase Phone Verification:</span> A 6-digit OTP will be dispatched to your mobile number.
                     </div>
                   </div>
 
@@ -573,7 +831,7 @@ export const LoginDashboard: React.FC<LoginDashboardProps> = ({
                       <span>Sending OTP...</span>
                     ) : (
                       <>
-                        <span>{patientMode === 'login' ? 'Send OTP & Sign In' : 'Send OTP & Register'}</span>
+                        <span>{mode === 'signup' ? 'Send OTP & Complete Registration' : 'Send OTP & Sign In'}</span>
                         <ArrowRight className="w-3.5 h-3.5" />
                       </>
                     )}
@@ -581,10 +839,10 @@ export const LoginDashboard: React.FC<LoginDashboardProps> = ({
                 </form>
               ) : (
                 // Step 2: Enter 6-digit OTP
-                <form onSubmit={handleVerifyOtp} className="space-y-4">
+                <form onSubmit={handlePatientVerifyOtp} className="space-y-4">
                   <div className="text-center">
                     <p className="text-xs text-slate-600 mb-3">
-                      Enter the 6-digit verification code sent to <strong className="font-mono">{patientForm.phone}</strong>
+                      Enter the 6-digit code sent to <strong className="font-mono">{patientForm.phone}</strong>
                     </p>
 
                     <div className="flex justify-center gap-2 mb-2">
@@ -617,11 +875,11 @@ export const LoginDashboard: React.FC<LoginDashboardProps> = ({
                       ) : (
                         <button
                           type="button"
-                          onClick={handleSendOtp}
+                          onClick={handlePatientSendOtp}
                           className="text-[11px] font-bold text-emerald-700 hover:underline flex items-center space-x-1 cursor-pointer"
                         >
                           <RefreshCw className="w-3 h-3" />
-                          <span>Resend Code</span>
+                          <span>Resend OTP</span>
                         </button>
                       )}
                     </div>
@@ -633,11 +891,11 @@ export const LoginDashboard: React.FC<LoginDashboardProps> = ({
                     className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-xs shadow-xs flex items-center justify-center space-x-1.5 transition-all cursor-pointer"
                   >
                     {patientLoading ? (
-                      <span>Verifying Code...</span>
+                      <span>Verifying OTP...</span>
                     ) : (
                       <>
                         <CheckCircle2 className="w-3.5 h-3.5" />
-                        <span>Verify & Enter Patient Portal</span>
+                        <span>{mode === 'signup' ? 'Verify OTP & Register' : 'Verify OTP & Enter Portal'}</span>
                       </>
                     )}
                   </button>
@@ -647,7 +905,7 @@ export const LoginDashboard: React.FC<LoginDashboardProps> = ({
           )}
 
           {/* ======================================================== */}
-          {/* 2. HOSPITAL SECTION - REAL FIREBASE AUTHENTICATION */}
+          {/* 2. HOSPITAL: SIGN UP & SIGN IN */}
           {/* ======================================================== */}
           {selectedRole === 'hospital' && (
             <form onSubmit={handleHospitalSubmit} className="space-y-4">
@@ -657,20 +915,45 @@ export const LoginDashboard: React.FC<LoginDashboardProps> = ({
                   <span>{hospitalError}</span>
                 </div>
               )}
+              {hospitalSuccess && (
+                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 flex items-start space-x-2">
+                  <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>{hospitalSuccess}</span>
+                </div>
+              )}
 
               <div className="space-y-3.5">
+                {mode === 'signup' && (
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Staff Full Name
+                    </label>
+                    <div className="relative">
+                      <User className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                      <input
+                        type="text"
+                        required
+                        value={hospitalForm.fullName}
+                        onChange={(e) => setHospitalForm({ ...hospitalForm, fullName: e.target.value })}
+                        placeholder="e.g. Dr. Arvind Sharma"
+                        className="w-full pl-9 pr-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 bg-slate-50/50"
+                      />
+                    </div>
+                  </div>
+                )}
+
                 <div>
                   <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                    Hospital Staff Email ID
+                    Hospital Work Email ID
                   </label>
                   <div className="relative">
                     <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
                     <input
                       type="email"
                       required
-                      value={hospitalAuth.email}
-                      onChange={(e) => setHospitalAuth({ ...hospitalAuth, email: e.target.value })}
-                      placeholder="e.g. staff@apollohospitals.org"
+                      value={hospitalForm.email}
+                      onChange={(e) => setHospitalForm({ ...hospitalForm, email: e.target.value })}
+                      placeholder="e.g. arvind.sharma@apollohospitals.org"
                       className="w-full pl-9 pr-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 bg-slate-50/50"
                     />
                   </div>
@@ -678,16 +961,16 @@ export const LoginDashboard: React.FC<LoginDashboardProps> = ({
 
                 <div>
                   <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                    Workstation Password
+                    {mode === 'signup' ? 'Create Password (min 6 chars)' : 'Workstation Password'}
                   </label>
                   <div className="relative">
                     <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
                     <input
                       type={showHospitalPassword ? 'text' : 'password'}
                       required
-                      value={hospitalAuth.password}
-                      onChange={(e) => setHospitalAuth({ ...hospitalAuth, password: e.target.value })}
-                      placeholder="Enter hospital portal password"
+                      value={hospitalForm.password}
+                      onChange={(e) => setHospitalForm({ ...hospitalForm, password: e.target.value })}
+                      placeholder="Enter password"
                       className="w-full pl-9 pr-9 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 bg-slate-50/50"
                     />
                     <button
@@ -707,8 +990,8 @@ export const LoginDashboard: React.FC<LoginDashboardProps> = ({
                   <div className="relative">
                     <Building2 className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
                     <select
-                      value={hospitalAuth.hospitalName}
-                      onChange={(e) => setHospitalAuth({ ...hospitalAuth, hospitalName: e.target.value })}
+                      value={hospitalForm.hospitalName}
+                      onChange={(e) => setHospitalForm({ ...hospitalForm, hospitalName: e.target.value })}
                       className="w-full pl-9 pr-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 bg-slate-50/50"
                     >
                       <option value="Apollo Multi-Specialty Hospital">Apollo Multi-Specialty Hospital (Main Campus)</option>
@@ -718,26 +1001,6 @@ export const LoginDashboard: React.FC<LoginDashboardProps> = ({
                     </select>
                   </div>
                 </div>
-
-                <div className="flex items-center justify-between text-[11px]">
-                  <label className="flex items-center space-x-2 text-slate-600 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={hospitalAuth.rememberMe}
-                      onChange={(e) => setHospitalAuth({ ...hospitalAuth, rememberMe: e.target.checked })}
-                      className="rounded text-teal-600 focus:ring-teal-500 cursor-pointer"
-                    />
-                    <span>Remember workstation</span>
-                  </label>
-                  <span className="text-teal-700 font-semibold text-[10px] font-mono">Firebase Auth Integrated</span>
-                </div>
-              </div>
-
-              <div className="p-2.5 rounded-xl bg-teal-50/60 border border-teal-200/80 text-[11px] text-teal-900 flex items-start space-x-2">
-                <ShieldCheck className="w-4 h-4 text-teal-700 shrink-0 mt-0.5" />
-                <div>
-                  <span className="font-bold">Hospital Staff Clearance:</span> Authenticated for admissions, itemized charges, discharge estimation, and patient SMS notifications. (No TPA access).
-                </div>
               </div>
 
               <button
@@ -746,10 +1009,10 @@ export const LoginDashboard: React.FC<LoginDashboardProps> = ({
                 className="w-full py-2.5 px-4 rounded-xl bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white font-bold text-xs shadow-xs flex items-center justify-center space-x-1.5 transition-all cursor-pointer"
               >
                 {hospitalLoading ? (
-                  <span>Authenticating via Firebase...</span>
+                  <span>Authenticating...</span>
                 ) : (
                   <>
-                    <span>Sign In to Hospital Console</span>
+                    <span>{mode === 'signup' ? 'Create Hospital Account' : 'Sign In to Hospital Console'}</span>
                     <ArrowRight className="w-3.5 h-3.5" />
                   </>
                 )}
@@ -758,7 +1021,7 @@ export const LoginDashboard: React.FC<LoginDashboardProps> = ({
           )}
 
           {/* ======================================================== */}
-          {/* 3. INSURANCE COMPANY SECTION - REAL FIREBASE AUTH */}
+          {/* 3. INSURER: SIGN UP & SIGN IN */}
           {/* ======================================================== */}
           {selectedRole === 'insurer' && (
             <form onSubmit={handleInsurerSubmit} className="space-y-4">
@@ -768,8 +1031,33 @@ export const LoginDashboard: React.FC<LoginDashboardProps> = ({
                   <span>{insurerError}</span>
                 </div>
               )}
+              {insurerSuccess && (
+                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 flex items-start space-x-2">
+                  <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>{insurerSuccess}</span>
+                </div>
+              )}
 
               <div className="space-y-3.5">
+                {mode === 'signup' && (
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Officer Full Name
+                    </label>
+                    <div className="relative">
+                      <User className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                      <input
+                        type="text"
+                        required
+                        value={insurerForm.fullName}
+                        onChange={(e) => setInsurerForm({ ...insurerForm, fullName: e.target.value })}
+                        placeholder="e.g. Rohit Mehta"
+                        className="w-full pl-9 pr-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-50/50"
+                      />
+                    </div>
+                  </div>
+                )}
+
                 <div>
                   <label className="block text-[11px] font-bold text-slate-700 mb-1">
                     Adjudication Officer Work Email
@@ -779,9 +1067,9 @@ export const LoginDashboard: React.FC<LoginDashboardProps> = ({
                     <input
                       type="email"
                       required
-                      value={insurerAuth.email}
-                      onChange={(e) => setInsurerAuth({ ...insurerAuth, email: e.target.value })}
-                      placeholder="e.g. adjudicator@starhealth.in"
+                      value={insurerForm.email}
+                      onChange={(e) => setInsurerForm({ ...insurerForm, email: e.target.value })}
+                      placeholder="e.g. rohit.mehta@starhealth.in"
                       className="w-full pl-9 pr-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-50/50"
                     />
                   </div>
@@ -789,16 +1077,16 @@ export const LoginDashboard: React.FC<LoginDashboardProps> = ({
 
                 <div>
                   <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                    Payer Gateway Password
+                    {mode === 'signup' ? 'Create Password (min 6 chars)' : 'Payer Gateway Password'}
                   </label>
                   <div className="relative">
                     <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
                     <input
                       type={showInsurerPassword ? 'text' : 'password'}
                       required
-                      value={insurerAuth.password}
-                      onChange={(e) => setInsurerAuth({ ...insurerAuth, password: e.target.value })}
-                      placeholder="Enter insurance portal password"
+                      value={insurerForm.password}
+                      onChange={(e) => setInsurerForm({ ...insurerForm, password: e.target.value })}
+                      placeholder="Enter password"
                       className="w-full pl-9 pr-9 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-50/50"
                     />
                     <button
@@ -818,8 +1106,8 @@ export const LoginDashboard: React.FC<LoginDashboardProps> = ({
                   <div className="relative">
                     <Shield className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
                     <select
-                      value={insurerAuth.company}
-                      onChange={(e) => setInsurerAuth({ ...insurerAuth, company: e.target.value })}
+                      value={insurerForm.company}
+                      onChange={(e) => setInsurerForm({ ...insurerForm, company: e.target.value })}
                       className="w-full pl-9 pr-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-50/50"
                     >
                       <option value="Star Health & Allied Insurance">Star Health & Allied Insurance</option>
@@ -830,26 +1118,6 @@ export const LoginDashboard: React.FC<LoginDashboardProps> = ({
                     </select>
                   </div>
                 </div>
-
-                <div className="flex items-center justify-between text-[11px]">
-                  <label className="flex items-center space-x-2 text-slate-600 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={insurerAuth.rememberMe}
-                      onChange={(e) => setInsurerAuth({ ...insurerAuth, rememberMe: e.target.checked })}
-                      className="rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                    />
-                    <span>Remember terminal</span>
-                  </label>
-                  <span className="text-indigo-700 font-semibold text-[10px] font-mono">Firebase Auth Integrated</span>
-                </div>
-              </div>
-
-              <div className="p-2.5 rounded-xl bg-indigo-50/60 border border-indigo-200/80 text-[11px] text-indigo-900 flex items-start space-x-2">
-                <ShieldCheck className="w-4 h-4 text-indigo-700 shrink-0 mt-0.5" />
-                <div>
-                  <span className="font-bold">Payer Privileges:</span> Policy management, claim adjudication, tokenized pre-authorizations, and SMS notifications.
-                </div>
               </div>
 
               <button
@@ -858,10 +1126,10 @@ export const LoginDashboard: React.FC<LoginDashboardProps> = ({
                 className="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold text-xs shadow-xs flex items-center justify-center space-x-1.5 transition-all cursor-pointer"
               >
                 {insurerLoading ? (
-                  <span>Authenticating via Firebase...</span>
+                  <span>Authenticating...</span>
                 ) : (
                   <>
-                    <span>Sign In to Insurer & Payer Portal</span>
+                    <span>{mode === 'signup' ? 'Create Insurer Account' : 'Sign In to Insurer Portal'}</span>
                     <ArrowRight className="w-3.5 h-3.5" />
                   </>
                 )}
@@ -870,7 +1138,7 @@ export const LoginDashboard: React.FC<LoginDashboardProps> = ({
           )}
 
           {/* ======================================================== */}
-          {/* 4. ADMIN SECTION - SEPARATE MANAGEMENT CONSOLE */}
+          {/* 4. ADMIN: MASTER SIGN IN */}
           {/* ======================================================== */}
           {selectedRole === 'admin' && (
             <form onSubmit={handleAdminSubmit} className="space-y-4">
@@ -926,7 +1194,7 @@ export const LoginDashboard: React.FC<LoginDashboardProps> = ({
                 <div className="p-2.5 rounded-xl bg-purple-50/60 border border-purple-200/80 text-[11px] text-purple-900 flex items-start space-x-2">
                   <Settings className="w-4 h-4 text-purple-700 shrink-0 mt-0.5" />
                   <div>
-                    <span className="font-bold">Admin Console Access:</span> Houses N8N automation workflows, Trace Commons longitudinal data governance, SMS broadcasts, and user controls.
+                    <span className="font-bold">Admin Console Access:</span> Houses N8N automation workflows, real-time SMS broadcasts, and user controls.
                   </div>
                 </div>
               </div>
@@ -953,7 +1221,7 @@ export const LoginDashboard: React.FC<LoginDashboardProps> = ({
 
       {/* Footer */}
       <footer className="py-4 text-center text-[11px] text-slate-400 border-t border-slate-200">
-        MedPass AI Enterprise • Firebase Phone OTP & Auth • 256-Bit Cryptographic Sessions
+        MedPass AI Enterprise • Firebase Phone OTP & Auth • Secure Healthcare Gateway
       </footer>
     </div>
   );

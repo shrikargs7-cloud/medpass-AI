@@ -26,7 +26,7 @@ export const MCPAgentDrawer: React.FC<MCPAgentDrawerProps> = ({
   const [messages, setMessages] = useState<Message[]>([
     {
       role: 'agent',
-      text: 'Hello! I am MedPass Agent. I utilize registered Model Context Protocol (MCP) tools to query policy terms, explain coverage deductions, inspect discharge blockers, or query Trace Commons. How can I assist you?'
+      text: 'Hello! I am MedPass Agent. I utilize registered Model Context Protocol (MCP) tools to query policy terms, explain coverage deductions, or inspect discharge blockers. How can I assist you?'
     }
   ]);
 
@@ -162,10 +162,10 @@ export const MCPAgentDrawer: React.FC<MCPAgentDrawerProps> = ({
               What blockers are active?
             </button>
             <button
-              onClick={() => handleSend("Query Trace Commons dataset metrics")}
+              onClick={() => handleSend("Explain policy coverage deductions")}
               className="text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 py-1 rounded-md transition-colors"
             >
-              Query Trace dataset
+              Explain coverage rules
             </button>
           </div>
 
