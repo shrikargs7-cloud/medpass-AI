@@ -1,7 +1,7 @@
 services:
-  - type: web_service
+  - type: web
     name: medpass-backend
-    env: python
+    runtime: python
     region: singapore
     plan: free
     buildCommand: pip install -r backend/requirements.txt
@@ -12,8 +12,9 @@ services:
       - key: TRACE_PSEUDONYM_SECRET
         generateValue: true
 
-  - type: static_site
+  - type: web
     name: medpass-frontend
+    runtime: static
     buildCommand: cd frontend && npm ci && npm run build
     staticPublishPath: ./frontend/dist
     routes:
