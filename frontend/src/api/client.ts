@@ -243,42 +243,23 @@ export async function fetchMCPTools(): Promise<MCPTool[]> {
   return res.json();
 }
 
-export async function chatMCPAgent(prompt: string, caseId?: string): Promise<any> {
-  const beeceptorBase = import.meta.env.VITE_BEECEPTOR_BASE_URL || 'https://medpass.proxy.beeceptor.com';
-  
-  // Try sending query through Beeceptor proxy first (allows user to inspect/mock agent queries on Beeceptor)
-  if (beeceptorBase) {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2500);
-      const beeceptorRes = await fetch(`${beeceptorBase.replace(/\/$/, '')}/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, case_id: caseId, timestamp: new Date().toISOString() }),
-        signal: controller.signal
-      });
-      clearTimeout(timeoutId);
-      if (beeceptorRes.ok) {
-        const data = await beeceptorRes.json().catch(() => null);
-        if (data && (data.reply || data.response || data.message)) {
-          return {
-            reply: data.reply || data.response || data.message,
-            tools_invoked: data.tools_invoked || [{ tool: 'beeceptor_agent_proxy', result: data }],
-            source: 'beeceptor'
-          };
-        }
-      }
-    } catch {
-      // Fallback seamlessly to local deterministic MCP agent if Beeceptor endpoint is unset or timed out
-    }
-  }
-
+export async function chatMCPAgent(
+  prompt: string,
+  caseId?: string,
+  apiKey?: string,
+  provider?: string
+): Promise<any> {
   const res = await fetch(`${API_BASE}/mcp/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt, case_id: caseId })
+    body: JSON.stringify({
+      prompt,
+      case_id: caseId,
+      api_key: apiKey,
+      provider: provider
+    })
   });
-  if (!res.ok) throw new Error('MCP agent error');
+  if (!res.ok) throw new Error('Healthcare Assistant error');
   return res.json();
 }
 

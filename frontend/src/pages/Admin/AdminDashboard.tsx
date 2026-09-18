@@ -1519,7 +1519,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, userNa
                   { name: 'Insurer / TPA Gateway', status: 'Connected', desc: 'Secure mutual TLS tunnel established with Star Health & HDFC ERGO.', tag: 'Active' },
                   { name: 'Payer Interface', status: 'Connected', desc: 'Cashless Everywhere sandbox simulation & claim response queue.', tag: 'Simulation' },
                   { name: 'OCR & Document Intelligence', status: 'Ready', desc: 'Automated invoice and discharge summary bill extraction engine.', tag: 'Ready' },
-                  { name: 'Beeceptor Proxy Gateway', status: 'Connected', desc: 'Real-time mock proxy endpoint for transparent API inspection.', tag: 'Proxy Active' },
+                  { name: 'NHCX Claims Gateway', status: 'Connected', desc: 'National Health Claims Exchange protocol adapter for payer communications.', tag: 'Gateway Active' },
                   { name: 'n8n Automation Dispatcher', status: 'Connected', desc: 'Decoupled event outbox handler for alerts and SLA monitoring.', tag: 'Connected' },
                 ].map((integ, idx) => (
                   <div key={idx} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs flex flex-col justify-between space-y-3">

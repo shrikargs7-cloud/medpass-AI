@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { Header } from './components/Header';
-import { BeeceptorBar } from './components/BeeceptorBar';
 import { MCPAgentDrawer } from './components/MCPAgentDrawer';
 import { LoginDashboard } from './dashboards/LoginDashboard';
 import { HospitalDashboard } from './dashboards/HospitalDashboard';
@@ -17,7 +16,6 @@ interface UserSession {
 export function App() {
   const [userSession, setUserSession] = useState<UserSession | null>(null);
   const [activePortal, setActivePortal] = useState<'hospital' | 'insurer' | 'patient'>('hospital');
-  const [selectedScenario, setSelectedScenario] = useState<string>('SUCCESS');
   const [selectedCaseId, setSelectedCaseId] = useState<string | undefined>(undefined);
   const [isMCPOpen, setIsMCPOpen] = useState<boolean>(false);
 
@@ -83,21 +81,12 @@ export function App() {
         onLogout={() => setUserSession(null)}
       />
 
-      {/* Payer Gateway Simulation & Event Webhook Bar */}
-      {(activePortal === 'hospital' || activePortal === 'insurer') && (
-        <BeeceptorBar
-          selectedScenario={selectedScenario}
-          setSelectedScenario={setSelectedScenario}
-        />
-      )}
-
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {activePortal === 'hospital' && (
           <HospitalDashboard
             onSelectCase={(id) => setSelectedCaseId(id)}
             selectedCaseId={selectedCaseId}
-            beeceptorScenario={selectedScenario}
           />
         )}
 
@@ -112,6 +101,21 @@ export function App() {
           />
         )}
       </main>
+
+      {/* Floating Chatbot Launcher Button */}
+      <div className="fixed bottom-6 right-6 z-30">
+        <button
+          onClick={() => setIsMCPOpen(true)}
+          className="group flex items-center space-x-2.5 px-4 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-full shadow-lg shadow-teal-700/20 transition-all hover:scale-105 cursor-pointer"
+          title="Open MedPass AI Healthcare Assistant"
+        >
+          <span className="relative flex h-3 w-3">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-300 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-3 w-3 bg-white"></span>
+          </span>
+          <span className="text-xs font-bold tracking-tight">MedPass AI Assistant</span>
+        </button>
+      </div>
 
       {/* AI Agent (MCP) Slide-over Drawer */}
       <MCPAgentDrawer

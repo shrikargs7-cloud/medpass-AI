@@ -120,7 +120,7 @@ export const WorkflowInfographicsModal: React.FC<WorkflowInfographicsModalProps>
             }`}
           >
             <Cpu className="w-3.5 h-3.5" />
-            <span>2. Beeceptor vs AI Agent (MCP)</span>
+            <span>2. Payer Gateway vs AI Agent</span>
           </button>
 
           <button
@@ -374,21 +374,21 @@ export const WorkflowInfographicsModal: React.FC<WorkflowInfographicsModalProps>
                   Clarification: Who Does What in MedPass AI?
                 </span>
                 <p className="leading-relaxed">
-                  The <strong>AI Agent (MCP)</strong> and <strong>Beeceptor</strong> serve completely different, complementary roles in this architecture:
+                  The <strong>AI Agent (MCP)</strong> and <strong>Payer Gateway (NHCX)</strong> serve completely different, complementary roles in this architecture:
                 </p>
               </div>
 
               {/* 3-Way Comparison Cards */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                {/* 1. Beeceptor */}
+                {/* 1. Payer Gateway */}
                 <div className="p-5 rounded-2xl bg-white border-2 border-amber-300 shadow-sm space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-900 px-2 py-0.5 rounded">
-                      External Simulation
+                      External Claims Gateway
                     </span>
                     <Network className="w-5 h-5 text-amber-600" />
                   </div>
-                  <h3 className="text-sm font-extrabold text-slate-900">Beeceptor / NHCX Gateway</h3>
+                  <h3 className="text-sm font-extrabold text-slate-900">Payer / NHCX Gateway</h3>
                   <div className="text-xs text-slate-600 space-y-1.5">
                     <p className="font-semibold text-amber-900">Role: External Payer Endpoint</p>
                     <p>Mocks the National Health Claims Exchange & Insurers:</p>

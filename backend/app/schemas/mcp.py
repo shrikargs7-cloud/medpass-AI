@@ -20,3 +20,5 @@ class MCPToolCallResponse(BaseModel):
 class MCPAgentChatRequest(BaseModel):
     prompt: str
     case_id: Optional[str] = None
+    api_key: Optional[str] = None
+    provider: Optional[str] = None

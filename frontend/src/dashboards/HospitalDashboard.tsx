@@ -23,13 +23,11 @@ import {
 interface HospitalDashboardProps {
   onSelectCase: (caseId: string) => void;
   selectedCaseId?: string;
-  beeceptorScenario: string;
 }
 
 export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
   onSelectCase,
-  selectedCaseId,
-  beeceptorScenario
+  selectedCaseId
 }) => {
   const [cases, setCases] = useState<CaseDetail[]>([]);
   const [selectedCase, setSelectedCase] = useState<CaseDetail | null>(null);
@@ -189,7 +187,7 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
     if (!selectedCase) return;
     try {
       setSubmitting(true);
-      const res = await submitCasePreauth(selectedCase.id, beeceptorScenario);
+      const res = await submitCasePreauth(selectedCase.id, 'SUCCESS');
       notify(`Payer response: ${res.authorization_status}.`);
       const updated = await fetchCaseDetail(selectedCase.id);
       setSelectedCase(updated);
