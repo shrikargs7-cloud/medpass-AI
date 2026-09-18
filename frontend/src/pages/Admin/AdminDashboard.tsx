@@ -369,7 +369,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, userNa
                       'MedPass Alert: Pre-authorization approved for Case #ROOMCAP-2025.',
                       'Hospital Notice: Estimated discharge ready. Patient co-pay: ₹60,000.',
                       'Payer Notice: Query requested for invoice item Pharmacy-01.',
-                      'MedPass OTP Verification Code: 123456. Valid for 10 minutes.'
+                      'MedPass Notice: Cashless authorization active. Coverage confirmed.'
                     ].map((tmpl, idx) => (
                       <button
                         key={idx}
@@ -436,7 +436,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, userNa
                 </thead>
                 <tbody>
                   {[
-                    { name: 'Priya Sharma (+91 98450 12345)', role: 'Patient', method: 'Firebase Phone OTP', status: 'Active' },
+                    { name: 'Priya Sharma (+91 98450 12345)', role: 'Patient', method: 'Mobile & Password Auth', status: 'Active' },
                     { name: 'Dr. Arvind Sharma (arvind.sharma@apollohospitals.org)', role: 'Hospital', method: 'Firebase Email/Password', status: 'Active' },
                     { name: 'Rohit Mehta (rohit.mehta@starhealth.in)', role: 'Insurer', method: 'Firebase Email/Password', status: 'Active' },
                     { name: 'System Administrator (admin@medpass.ai)', role: 'Admin', method: 'Firebase Superuser', status: 'Active' },

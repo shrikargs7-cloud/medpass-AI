@@ -6,7 +6,6 @@ import { LoginDashboard } from './dashboards/LoginDashboard';
 import { HospitalDashboard } from './dashboards/HospitalDashboard';
 import { InsurerDashboard } from './dashboards/InsurerDashboard';
 import { PatientDashboard } from './dashboards/PatientDashboard';
-import { PatientLogin } from './pages/Patient/PatientLogin';
 import { AdminDashboard } from './pages/Admin/AdminDashboard';
 
 interface UserSession {
@@ -21,25 +20,6 @@ export function App() {
   const [selectedScenario, setSelectedScenario] = useState<string>('SUCCESS');
   const [selectedCaseId, setSelectedCaseId] = useState<string | undefined>(undefined);
   const [isMCPOpen, setIsMCPOpen] = useState<boolean>(false);
-  const [showPatientOtpLogin, setShowPatientOtpLogin] = useState(false);
-
-  // Patient OTP login flow
-  if (showPatientOtpLogin && !userSession) {
-    return (
-      <PatientLogin
-        onLoginSuccess={(uid, phone) => {
-          setUserSession({
-            role: 'patient',
-            name: phone,
-            subtitle: 'Patient & Beneficiary'
-          });
-          setActivePortal('patient');
-          setShowPatientOtpLogin(false);
-        }}
-        onBack={() => setShowPatientOtpLogin(false)}
-      />
-    );
-  }
 
   // Admin dashboard (separate full-page UI)
   if (userSession && userSession.role === 'admin') {
@@ -87,7 +67,6 @@ export function App() {
             subtitle: 'System & Platform Administrator'
           });
         }}
-        onPatientOtpLogin={() => setShowPatientOtpLogin(true)}
       />
     );
   }

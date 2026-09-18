@@ -1,16 +1,13 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Building2, User, Shield, ArrowRight, Activity, CheckCircle2,
-  Lock, ShieldCheck, Mail, Eye, EyeOff, Phone, RefreshCw, Settings,
-  AlertCircle, Sparkles, UserPlus, LogIn
+  Lock, ShieldCheck, Mail, Eye, EyeOff, Phone, Settings,
+  AlertCircle, UserPlus, LogIn
 } from 'lucide-react';
 import { auth } from '../firebase';
 import {
   signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  signInWithPhoneNumber,
-  RecaptchaVerifier,
-  ConfirmationResult
+  createUserWithEmailAndPassword
 } from 'firebase/auth';
 import { fetchCases } from '../api/client';
 import { CaseDetail } from '../types';
@@ -20,7 +17,6 @@ interface LoginDashboardProps {
   onLoginPatient: (caseId: string, patientName: string) => void;
   onLoginInsurer: (insurerInfo: { name: string; role: string; company: string }) => void;
   onLoginAdmin?: (adminInfo: { name: string; role: string }) => void;
-  onPatientOtpLogin?: () => void;
 }
 
 export const LoginDashboard: React.FC<LoginDashboardProps> = ({
@@ -34,23 +30,18 @@ export const LoginDashboard: React.FC<LoginDashboardProps> = ({
   // Mode: First Sign Up, then Sign In!
   const [mode, setMode] = useState<'signup' | 'login'>('signup');
 
-  // 1. Patient State
+  // 1. Patient State (Pure credentials, NO OTP)
   const [patientForm, setPatientForm] = useState({
     fullName: '',
     phone: '+91',
+    password: '',
     caseId: '',
     rememberMe: true
   });
-  const [otpSent, setOtpSent] = useState(false);
-  const [otpDigits, setOtpDigits] = useState(['', '', '', '', '', '']);
+  const [showPatientPassword, setShowPatientPassword] = useState(false);
   const [patientLoading, setPatientLoading] = useState(false);
   const [patientError, setPatientError] = useState<string | null>(null);
   const [patientSuccess, setPatientSuccess] = useState<string | null>(null);
-  const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
-  const [resendTimer, setResendTimer] = useState(0);
-
-  const otpInputRefs = useRef<(HTMLInputElement | null)[]>([]);
-  const recaptchaVerifierRef = useRef<RecaptchaVerifier | null>(null);
 
   // 2. Hospital State
   const [hospitalForm, setHospitalForm] = useState({
@@ -92,13 +83,13 @@ export const LoginDashboard: React.FC<LoginDashboardProps> = ({
   const [cases, setCases] = useState<CaseDetail[]>([]);
   const [loadingCases, setLoadingCases] = useState<boolean>(true);
 
-  // Pre-seed demo accounts in local registry if not already present
+  // Initialize demo accounts in local registry if not present
   useEffect(() => {
     const initRegistry = () => {
       if (!localStorage.getItem('medpass_registered_patients')) {
         const defaultPatients = [
-          { phone: '+919845012345', name: 'Priya Sharma' },
-          { phone: '+919876543210', name: 'Vikram Rao' }
+          { phone: '+919845012345', password: 'password123', name: 'Priya Sharma' },
+          { phone: '+919876543210', password: 'password123', name: 'Vikram Rao' }
         ];
         localStorage.setItem('medpass_registered_patients', JSON.stringify(defaultPatients));
       }
@@ -124,55 +115,32 @@ export const LoginDashboard: React.FC<LoginDashboardProps> = ({
       .finally(() => setLoadingCases(false));
   }, []);
 
-  // Countdown timer for OTP resend
-  useEffect(() => {
-    if (resendTimer > 0) {
-      const timer = setTimeout(() => setResendTimer(resendTimer - 1), 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [resendTimer]);
-
-  // Recaptcha initialization
-  const setupRecaptcha = () => {
-    try {
-      if (recaptchaVerifierRef.current) {
-        recaptchaVerifierRef.current.clear();
-      }
-      recaptchaVerifierRef.current = new RecaptchaVerifier(auth, 'recaptcha-anchor', {
-        size: 'invisible',
-        callback: () => {},
-        'expired-callback': () => {
-          setPatientError('reCAPTCHA expired. Please request OTP again.');
-        }
-      });
-    } catch (e) {
-      console.warn('Recaptcha setup warning:', e);
-    }
-  };
-
-  // Helper: check if phone is registered
-  const isPhoneRegistered = (phone: string): boolean => {
+  // Helper: check patient credentials in registry
+  const getRegisteredPatient = (phone: string) => {
     const rawList = localStorage.getItem('medpass_registered_patients');
-    if (!rawList) return false;
+    if (!rawList) return null;
     try {
       const list = JSON.parse(rawList);
       const cleanTarget = phone.replace(/[\s-]/g, '');
-      return list.some((p: any) => p.phone.replace(/[\s-]/g, '') === cleanTarget);
+      return list.find((p: any) => p.phone.replace(/[\s-]/g, '') === cleanTarget) || null;
     } catch {
-      return false;
+      return null;
     }
   };
 
-  // Helper: save patient registration
-  const registerPatient = (phone: string, name: string) => {
+  // Helper: register patient
+  const registerPatientRecord = (phone: string, pass: string, name: string) => {
     const rawList = localStorage.getItem('medpass_registered_patients') || '[]';
     try {
       const list = JSON.parse(rawList);
       const cleanPhone = phone.replace(/[\s-]/g, '');
-      if (!list.some((p: any) => p.phone.replace(/[\s-]/g, '') === cleanPhone)) {
-        list.push({ phone: cleanPhone, name });
-        localStorage.setItem('medpass_registered_patients', JSON.stringify(list));
+      const existingIdx = list.findIndex((p: any) => p.phone.replace(/[\s-]/g, '') === cleanPhone);
+      if (existingIdx >= 0) {
+        list[existingIdx] = { phone: cleanPhone, password: pass, name };
+      } else {
+        list.push({ phone: cleanPhone, password: pass, name });
       }
+      localStorage.setItem('medpass_registered_patients', JSON.stringify(list));
     } catch {
       // ignore
     }
@@ -203,137 +171,111 @@ export const LoginDashboard: React.FC<LoginDashboardProps> = ({
   };
 
   // ========================================================
-  // PATIENT: SEND OTP
+  // PATIENT: SIGN UP & SIGN IN (NO OTP)
   // ========================================================
-  const handlePatientSendOtp = async (e: React.FormEvent) => {
+  const handlePatientSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setPatientLoading(true);
     setPatientError(null);
     setPatientSuccess(null);
 
     const rawPhone = patientForm.phone.trim();
-    if (rawPhone.length < 10) {
+    const cleanPhone = rawPhone.replace(/[\s-]/g, '');
+    const password = patientForm.password;
+
+    if (cleanPhone.length < 10) {
       setPatientError('Please enter a valid 10-digit mobile number with country code (e.g. +91 98450 12345).');
+      setPatientLoading(false);
       return;
     }
 
-    const formattedPhone = rawPhone.startsWith('+') ? rawPhone : `+91${rawPhone}`;
-
-    // If logging in: check if mobile number is actually registered!
-    if (mode === 'login') {
-      if (!isPhoneRegistered(formattedPhone)) {
-        setPatientError(`No account registered with ${formattedPhone}. Please sign up first.`);
-        return;
-      }
+    if (!password) {
+      setPatientError('Please enter your account password / security PIN.');
+      setPatientLoading(false);
+      return;
     }
 
-    // If signing up: check if name is provided
+    const syntheticEmail = `${cleanPhone.replace('+', '')}@patient.medpass.ai`;
+
     if (mode === 'signup') {
+      // SIGN UP MODE
       if (!patientForm.fullName.trim()) {
-        setPatientError('Please enter your full name for registration.');
+        setPatientError('Please enter your full name as per hospital records.');
+        setPatientLoading(false);
         return;
       }
-    }
-
-    try {
-      setPatientLoading(true);
-      setupRecaptcha();
+      if (password.length < 6) {
+        setPatientError('Password must be at least 6 characters long.');
+        setPatientLoading(false);
+        return;
+      }
 
       try {
-        const confirmation = await signInWithPhoneNumber(auth, formattedPhone, recaptchaVerifierRef.current!);
-        setConfirmationResult(confirmation);
-        setPatientSuccess(`Verification OTP sent via SMS to ${formattedPhone}.`);
-      } catch (fbErr: any) {
-        console.warn('Firebase SMS provider fallback (dev test code active):', fbErr.message);
-        setPatientSuccess(`Verification OTP dispatched. Enter code 123456 or SMS code.`);
-      }
-
-      setOtpSent(true);
-      setResendTimer(30);
-      setTimeout(() => otpInputRefs.current[0]?.focus(), 150);
-    } catch (err: any) {
-      setPatientError(err.message || 'Failed to dispatch verification code. Please try again.');
-    } finally {
-      setPatientLoading(false);
-    }
-  };
-
-  // ========================================================
-  // PATIENT: VERIFY OTP & SIGN IN / SIGN UP
-  // ========================================================
-  const handlePatientVerifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setPatientError(null);
-    const code = otpDigits.join('');
-    if (code.length !== 6) {
-      setPatientError('Please enter all 6 digits of the OTP verification code.');
-      return;
-    }
-
-    try {
-      setPatientLoading(true);
-
-      // Verify OTP code
-      if (confirmationResult) {
+        // Create in Firebase
         try {
-          await confirmationResult.confirm(code);
-        } catch (confirmErr: any) {
-          if (code !== '123456') {
-            setPatientError('Invalid verification code. Please enter the correct OTP.');
-            setOtpDigits(['', '', '', '', '', '']);
-            otpInputRefs.current[0]?.focus();
+          await createUserWithEmailAndPassword(auth, syntheticEmail, password);
+        } catch (fbErr: any) {
+          if (fbErr.code === 'auth/email-already-in-use') {
+            setPatientError(`An account with mobile number ${cleanPhone} already exists. Please switch to Sign In.`);
             setPatientLoading(false);
             return;
           }
         }
-      } else {
-        // Dev fallback validation
-        if (code !== '123456') {
-          setPatientError('Invalid OTP code. Please enter the correct verification code.');
-          setOtpDigits(['', '', '', '', '', '']);
-          otpInputRefs.current[0]?.focus();
-          setPatientLoading(false);
-          return;
+
+        registerPatientRecord(cleanPhone, password, patientForm.fullName);
+        localStorage.setItem('medpass_active_role', 'patient');
+        localStorage.setItem('medpass_patient_phone', cleanPhone);
+
+        const targetCaseId = patientForm.caseId || (cases[0] ? cases[0].id : '');
+        onLoginPatient(targetCaseId, patientForm.fullName);
+      } catch (err: any) {
+        setPatientError(err.message || 'Patient registration failed. Please try again.');
+      } finally {
+        setPatientLoading(false);
+      }
+    } else {
+      // SIGN IN MODE
+      try {
+        let authenticated = false;
+
+        // Try Firebase Authentication
+        try {
+          await signInWithEmailAndPassword(auth, syntheticEmail, password);
+          authenticated = true;
+        } catch (fbErr: any) {
+          // Check local registry
+          const registered = getRegisteredPatient(cleanPhone);
+          if (registered) {
+            if (registered.password === password) {
+              authenticated = true;
+            } else {
+              setPatientError('Incorrect password or security PIN. Please verify and try again.');
+              setPatientLoading(false);
+              return;
+            }
+          } else {
+            setPatientError(`No account registered with ${cleanPhone}. Please switch to Sign Up to create an account.`);
+            setPatientLoading(false);
+            return;
+          }
         }
+
+        if (authenticated) {
+          localStorage.setItem('medpass_active_role', 'patient');
+          localStorage.setItem('medpass_patient_phone', cleanPhone);
+
+          const registered = getRegisteredPatient(cleanPhone);
+          const targetCaseId = patientForm.caseId || (cases[0] ? cases[0].id : '');
+          const foundCase = cases.find((c) => c.id === targetCaseId);
+          const patientName = registered?.name || foundCase?.patient?.full_name || 'Verified Patient';
+
+          onLoginPatient(targetCaseId, patientName);
+        }
+      } catch (err: any) {
+        setPatientError(err.message || 'Authentication error.');
+      } finally {
+        setPatientLoading(false);
       }
-
-      // If in Sign Up mode: register the patient now
-      if (mode === 'signup') {
-        registerPatient(patientForm.phone, patientForm.fullName);
-      }
-
-      // Map to case and complete login
-      const targetCaseId = patientForm.caseId || (cases[0] ? cases[0].id : '');
-      const foundCase = cases.find((c) => c.id === targetCaseId);
-      const nameToUse = patientForm.fullName || (foundCase ? foundCase.patient.full_name : 'Verified Patient');
-
-      localStorage.setItem('medpass_active_role', 'patient');
-      localStorage.setItem('medpass_patient_phone', patientForm.phone);
-
-      onLoginPatient(targetCaseId, nameToUse);
-    } catch (err: any) {
-      setPatientError(err.message || 'OTP verification failed. Please try again.');
-    } finally {
-      setPatientLoading(false);
-    }
-  };
-
-  // OTP digit navigation
-  const handleOtpDigitChange = (index: number, val: string) => {
-    if (val.length > 1) val = val.slice(-1);
-    if (!/^\d*$/.test(val)) return;
-
-    const copy = [...otpDigits];
-    copy[index] = val;
-    setOtpDigits(copy);
-
-    if (val && index < 5) {
-      otpInputRefs.current[index + 1]?.focus();
-    }
-  };
-
-  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent) => {
-    if (e.key === 'Backspace' && !otpDigits[index] && index > 0) {
-      otpInputRefs.current[index - 1]?.focus();
     }
   };
 
@@ -368,7 +310,6 @@ export const LoginDashboard: React.FC<LoginDashboardProps> = ({
       }
 
       try {
-        // Real Firebase Sign Up
         try {
           await createUserWithEmailAndPassword(auth, email, password);
         } catch (fbErr: any) {
@@ -397,12 +338,10 @@ export const LoginDashboard: React.FC<LoginDashboardProps> = ({
       try {
         let authenticated = false;
 
-        // Try Firebase Sign In
         try {
           await signInWithEmailAndPassword(auth, email, password);
           authenticated = true;
         } catch (fbErr: any) {
-          // Check local registry fallback
           const localUser = checkRegisteredUser(email, password, 'hospital');
           if (localUser) {
             if (localUser.password === password) {
@@ -598,7 +537,6 @@ export const LoginDashboard: React.FC<LoginDashboardProps> = ({
 
   const handleRoleChange = (role: 'patient' | 'hospital' | 'insurer' | 'admin') => {
     setSelectedRole(role);
-    setOtpSent(false);
     setPatientError(null);
     setHospitalError(null);
     setInsurerError(null);
@@ -608,9 +546,6 @@ export const LoginDashboard: React.FC<LoginDashboardProps> = ({
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col justify-between font-sans">
-      {/* Invisible reCAPTCHA anchor for Firebase Phone Auth */}
-      <div id="recaptcha-anchor"></div>
-
       {/* Top Header */}
       <header className="border-b border-slate-200 bg-white sticky top-0 z-30">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
@@ -707,12 +642,12 @@ export const LoginDashboard: React.FC<LoginDashboardProps> = ({
         {/* Dynamic Card for Selected Role */}
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden p-6">
           
-          {/* Sign Up vs Sign In Tab Toggle (for Patient, Hospital, and Insurer) */}
+          {/* Sign Up vs Sign In Tab Toggle */}
           {selectedRole !== 'admin' && (
             <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 mb-5">
               <button
                 type="button"
-                onClick={() => { setMode('signup'); setOtpSent(false); setPatientError(null); setHospitalError(null); setInsurerError(null); }}
+                onClick={() => { setMode('signup'); setPatientError(null); setHospitalError(null); setInsurerError(null); }}
                 className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center justify-center space-x-1.5 cursor-pointer ${
                   mode === 'signup'
                     ? 'bg-white text-slate-900 shadow-xs'
@@ -725,7 +660,7 @@ export const LoginDashboard: React.FC<LoginDashboardProps> = ({
 
               <button
                 type="button"
-                onClick={() => { setMode('login'); setOtpSent(false); setPatientError(null); setHospitalError(null); setInsurerError(null); }}
+                onClick={() => { setMode('login'); setPatientError(null); setHospitalError(null); setInsurerError(null); }}
                 className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center justify-center space-x-1.5 cursor-pointer ${
                   mode === 'login'
                     ? 'bg-white text-slate-900 shadow-xs'
@@ -739,10 +674,10 @@ export const LoginDashboard: React.FC<LoginDashboardProps> = ({
           )}
 
           {/* ======================================================== */}
-          {/* 1. PATIENT: MOBILE NUMBER + OTP SIGN UP & SIGN IN */}
+          {/* 1. PATIENT: DIRECT CREDENTIAL SIGN UP & SIGN IN (NO OTP) */}
           {/* ======================================================== */}
           {selectedRole === 'patient' && (
-            <div className="space-y-4">
+            <form onSubmit={handlePatientSubmit} className="space-y-4">
               {patientError && (
                 <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700 flex items-start space-x-2">
                   <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
@@ -756,152 +691,110 @@ export const LoginDashboard: React.FC<LoginDashboardProps> = ({
                 </div>
               )}
 
-              {!otpSent ? (
-                // Step 1: Form
-                <form onSubmit={handlePatientSendOtp} className="space-y-3.5">
-                  {mode === 'signup' && (
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                        Full Name (as per Hospital Records)
-                      </label>
-                      <div className="relative">
-                        <User className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-                        <input
-                          type="text"
-                          required
-                          value={patientForm.fullName}
-                          onChange={(e) => setPatientForm({ ...patientForm, fullName: e.target.value })}
-                          placeholder="e.g. Priya Sharma"
-                          className="w-full pl-9 pr-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-slate-50/50"
-                        />
-                      </div>
-                    </div>
-                  )}
-
+              <div className="space-y-3.5">
+                {mode === 'signup' && (
                   <div>
                     <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                      {mode === 'signup' ? 'Mobile Number to Register' : 'Registered Mobile Number'}
+                      Full Name (as per Hospital Records)
                     </label>
                     <div className="relative">
-                      <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                      <User className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
                       <input
-                        type="tel"
+                        type="text"
                         required
-                        value={patientForm.phone}
-                        onChange={(e) => setPatientForm({ ...patientForm, phone: e.target.value })}
-                        placeholder="+91 98450 12345"
-                        className="w-full pl-9 pr-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-slate-50/50 font-mono"
+                        value={patientForm.fullName}
+                        onChange={(e) => setPatientForm({ ...patientForm, fullName: e.target.value })}
+                        placeholder="e.g. Priya Sharma"
+                        className="w-full pl-9 pr-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-slate-50/50"
                       />
                     </div>
                   </div>
+                )}
 
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                      Select Linked Hospital Admission
-                    </label>
-                    <div className="relative">
-                      <Activity className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-                      <select
-                        value={patientForm.caseId}
-                        onChange={(e) => setPatientForm({ ...patientForm, caseId: e.target.value })}
-                        className="w-full pl-9 pr-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-slate-50/50 font-mono"
-                      >
-                        {cases.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            [{c.case_number}] {c.patient?.full_name} • {c.primary_diagnosis_name || 'Inpatient'}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    {mode === 'signup' ? 'Mobile Number to Register' : 'Registered Mobile Number'}
+                  </label>
+                  <div className="relative">
+                    <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                    <input
+                      type="tel"
+                      required
+                      value={patientForm.phone}
+                      onChange={(e) => setPatientForm({ ...patientForm, phone: e.target.value })}
+                      placeholder="+91 98450 12345"
+                      className="w-full pl-9 pr-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-slate-50/50 font-mono"
+                    />
                   </div>
+                </div>
 
-                  <div className="p-2.5 rounded-xl bg-emerald-50/60 border border-emerald-200/80 text-[11px] text-emerald-900 flex items-start space-x-2">
-                    <ShieldCheck className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
-                    <div>
-                      <span className="font-bold">Firebase Phone Verification:</span> A 6-digit OTP will be dispatched to your mobile number.
-                    </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    {mode === 'signup' ? 'Create Password / Security PIN' : 'Password / Security PIN'}
+                  </label>
+                  <div className="relative">
+                    <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                    <input
+                      type={showPatientPassword ? 'text' : 'password'}
+                      required
+                      value={patientForm.password}
+                      onChange={(e) => setPatientForm({ ...patientForm, password: e.target.value })}
+                      placeholder={mode === 'signup' ? 'Create a secure password (min 6 chars)' : 'Enter your password or PIN'}
+                      className="w-full pl-9 pr-9 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-slate-50/50"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPatientPassword(!showPatientPassword)}
+                      className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+                    >
+                      {showPatientPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
                   </div>
+                </div>
 
-                  <button
-                    type="submit"
-                    disabled={patientLoading}
-                    className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-xs shadow-xs flex items-center justify-center space-x-1.5 transition-all cursor-pointer"
-                  >
-                    {patientLoading ? (
-                      <span>Sending OTP...</span>
-                    ) : (
-                      <>
-                        <span>{mode === 'signup' ? 'Send OTP & Complete Registration' : 'Send OTP & Sign In'}</span>
-                        <ArrowRight className="w-3.5 h-3.5" />
-                      </>
-                    )}
-                  </button>
-                </form>
-              ) : (
-                // Step 2: Enter 6-digit OTP
-                <form onSubmit={handlePatientVerifyOtp} className="space-y-4">
-                  <div className="text-center">
-                    <p className="text-xs text-slate-600 mb-3">
-                      Enter the 6-digit code sent to <strong className="font-mono">{patientForm.phone}</strong>
-                    </p>
-
-                    <div className="flex justify-center gap-2 mb-2">
-                      {otpDigits.map((digit, idx) => (
-                        <input
-                          key={idx}
-                          ref={(el) => { otpInputRefs.current[idx] = el; }}
-                          type="text"
-                          inputMode="numeric"
-                          maxLength={1}
-                          value={digit}
-                          onChange={(e) => handleOtpDigitChange(idx, e.target.value)}
-                          onKeyDown={(e) => handleOtpKeyDown(idx, e)}
-                          className="w-10 h-12 text-center text-lg font-bold border-2 border-slate-300 rounded-xl focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 bg-white"
-                        />
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    Linked Hospital Admission
+                  </label>
+                  <div className="relative">
+                    <Activity className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                    <select
+                      value={patientForm.caseId}
+                      onChange={(e) => setPatientForm({ ...patientForm, caseId: e.target.value })}
+                      className="w-full pl-9 pr-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-slate-50/50 font-mono"
+                    >
+                      {cases.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          [{c.case_number}] {c.patient?.full_name} • {c.primary_diagnosis_name || 'Inpatient'}
+                        </option>
                       ))}
-                    </div>
-
-                    <div className="flex items-center justify-between text-xs text-slate-500 mt-2 px-1">
-                      <button
-                        type="button"
-                        onClick={() => { setOtpSent(false); setPatientError(null); }}
-                        className="text-slate-500 hover:text-slate-800 text-[11px] underline cursor-pointer"
-                      >
-                        Change Number
-                      </button>
-
-                      {resendTimer > 0 ? (
-                        <span className="text-[11px] text-slate-400 font-mono">Resend in {resendTimer}s</span>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={handlePatientSendOtp}
-                          className="text-[11px] font-bold text-emerald-700 hover:underline flex items-center space-x-1 cursor-pointer"
-                        >
-                          <RefreshCw className="w-3 h-3" />
-                          <span>Resend OTP</span>
-                        </button>
-                      )}
-                    </div>
+                    </select>
                   </div>
+                </div>
 
-                  <button
-                    type="submit"
-                    disabled={patientLoading || otpDigits.join('').length !== 6}
-                    className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-xs shadow-xs flex items-center justify-center space-x-1.5 transition-all cursor-pointer"
-                  >
-                    {patientLoading ? (
-                      <span>Verifying OTP...</span>
-                    ) : (
-                      <>
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        <span>{mode === 'signup' ? 'Verify OTP & Register' : 'Verify OTP & Enter Portal'}</span>
-                      </>
-                    )}
-                  </button>
-                </form>
-              )}
-            </div>
+                <div className="p-2.5 rounded-xl bg-emerald-50/60 border border-emerald-200/80 text-[11px] text-emerald-900 flex items-start space-x-2">
+                  <ShieldCheck className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold">Patient Portal Access:</span> Check cashless authorization, itemized bills, and approved coverage in real-time.
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={patientLoading}
+                className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-xs shadow-xs flex items-center justify-center space-x-1.5 transition-all cursor-pointer"
+              >
+                {patientLoading ? (
+                  <span>Authenticating...</span>
+                ) : (
+                  <>
+                    <span>{mode === 'signup' ? 'Create Patient Account' : 'Sign In to Patient Portal'}</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </>
+                )}
+              </button>
+            </form>
           )}
 
           {/* ======================================================== */}
@@ -1221,7 +1114,7 @@ export const LoginDashboard: React.FC<LoginDashboardProps> = ({
 
       {/* Footer */}
       <footer className="py-4 text-center text-[11px] text-slate-400 border-t border-slate-200">
-        MedPass AI Enterprise • Firebase Phone OTP & Auth • Secure Healthcare Gateway
+        MedPass AI Enterprise • Direct Secure Authentication • Healthcare Coordination Gateway
       </footer>
     </div>
   );
