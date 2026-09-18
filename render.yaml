@@ -1,5 +1,5 @@
 services:
-  - type: web_service
+  - type: web
     name: medpass-backend
     env: python
     region: singapore
@@ -12,7 +12,7 @@ services:
       - key: TRACE_PSEUDONYM_SECRET
         generateValue: true
 
-  - type: static_site
+  - type: static
     name: medpass-frontend
     buildCommand: cd frontend && npm ci && npm run build
     staticPublishPath: ./frontend/dist
