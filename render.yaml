@@ -12,8 +12,10 @@ services:
       - key: TRACE_PSEUDONYM_SECRET
         generateValue: true
 
-  - type: static
+  - type: web
     name: medpass-frontend
+    env: static
+    plan: free
     buildCommand: cd frontend && npm ci && npm run build
     staticPublishPath: ./frontend/dist
     routes:
