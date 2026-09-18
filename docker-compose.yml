@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: medpass-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: medpass_db
+      POSTGRES_USER: medpass_user
+      POSTGRES_PASSWORD: medpass_secure_password_2026
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U medpass_user -d medpass_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: medpass-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://medpass_user:medpass_secure_password_2026@postgres:5432/medpass_db
+      ENVIRONMENT: development
+      PORT: 8000
+      BEECEPTOR_BASE_URL: https://medpass-mocks.free.beeceptor.com
+      N8N_WEBHOOK_URL: http://n8n:5678/webhook/case-status
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-mock-gemini-key}
+      CORS_ORIGINS: "*"
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: medpass-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      VITE_API_URL: http://localhost:8000
+    ports:
+      - "3000:80"
+
+volumes:
+  postgres_data:
