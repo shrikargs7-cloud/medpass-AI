@@ -1,39 +1,22 @@
 services:
-  # =========================
-  # BACKEND
-  # =========================
   - type: web
     name: medpass-backend
     runtime: python
     region: singapore
     plan: free
-
     buildCommand: pip install -r backend/requirements.txt
-
     startCommand: uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT
-
-    healthCheckPath: /health
-
-    autoDeployTrigger: checksPass
-
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.14
-
       - key: TRACE_PSEUDONYM_SECRET
         generateValue: true
 
-  # =========================
-  # FRONTEND
-  # =========================
   - type: web
     name: medpass-frontend
     runtime: static
-
     buildCommand: cd frontend && npm ci && npm run build
-
     staticPublishPath: ./frontend/dist
-
     routes:
       - type: rewrite
         source: /*
