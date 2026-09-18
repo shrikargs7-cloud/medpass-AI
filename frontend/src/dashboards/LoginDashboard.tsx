@@ -10,12 +10,14 @@ interface LoginDashboardProps {
   onLoginHospital: (staffInfo: { name: string; role: string; hospital: string }) => void;
   onLoginPatient: (caseId: string, patientName: string) => void;
   onLoginInsurer: (insurerInfo: { name: string; role: string; company: string }) => void;
+  onPatientOtpLogin?: () => void;
 }
 
 export const LoginDashboard: React.FC<LoginDashboardProps> = ({
   onLoginHospital,
   onLoginPatient,
-  onLoginInsurer
+  onLoginInsurer,
+  onPatientOtpLogin
 }) => {
   const [selectedRole, setSelectedRole] = useState<'patient' | 'hospital' | 'insurer'>('hospital');
   
@@ -314,6 +316,24 @@ export const LoginDashboard: React.FC<LoginDashboardProps> = ({
                   </>
                 )}
               </button>
+
+              {onPatientOtpLogin && (
+                <div className="relative my-3">
+                  <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-200"></div></div>
+                  <div className="relative flex justify-center text-[10px]"><span className="bg-white px-3 text-slate-400 font-semibold">OR</span></div>
+                </div>
+              )}
+
+              {onPatientOtpLogin && (
+                <button
+                  type="button"
+                  onClick={onPatientOtpLogin}
+                  className="w-full py-2.5 px-4 rounded-xl bg-white hover:bg-emerald-50 border-2 border-emerald-300 text-emerald-700 font-bold text-xs shadow-xs flex items-center justify-center space-x-1.5 transition-all cursor-pointer"
+                >
+                  <Phone className="w-3.5 h-3.5" />
+                  <span>Login with Mobile OTP</span>
+                </button>
+              )}
             </form>
           )}
 

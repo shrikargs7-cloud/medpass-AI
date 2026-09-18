@@ -6,24 +6,52 @@ import { LoginDashboard } from './dashboards/LoginDashboard';
 import { HospitalDashboard } from './dashboards/HospitalDashboard';
 import { InsurerDashboard } from './dashboards/InsurerDashboard';
 import { PatientDashboard } from './dashboards/PatientDashboard';
-import { TraceCommonsDashboard } from './dashboards/TraceCommonsDashboard';
-import { WorkflowInfographicsModal } from './components/WorkflowInfographicsModal';
+import { PatientLogin } from './pages/Patient/PatientLogin';
+import { AdminDashboard } from './pages/Admin/AdminDashboard';
 
 interface UserSession {
-  role: 'hospital' | 'patient' | 'insurer' | 'trace';
+  role: 'hospital' | 'patient' | 'insurer' | 'admin';
   name: string;
   subtitle?: string;
 }
 
 export function App() {
   const [userSession, setUserSession] = useState<UserSession | null>(null);
-  const [activePortal, setActivePortal] = useState<'hospital' | 'insurer' | 'patient' | 'trace'>('hospital');
+  const [activePortal, setActivePortal] = useState<'hospital' | 'insurer' | 'patient'>('hospital');
   const [selectedScenario, setSelectedScenario] = useState<string>('SUCCESS');
   const [selectedCaseId, setSelectedCaseId] = useState<string | undefined>(undefined);
   const [isMCPOpen, setIsMCPOpen] = useState<boolean>(false);
-  const [isInfographicsOpen, setIsInfographicsOpen] = useState<boolean>(false);
+  const [showPatientOtpLogin, setShowPatientOtpLogin] = useState(false);
 
-  // If no user is logged in, show the initial enterprise Login Gateway
+  // Patient OTP login flow
+  if (showPatientOtpLogin && !userSession) {
+    return (
+      <PatientLogin
+        onLoginSuccess={(uid, phone) => {
+          setUserSession({
+            role: 'patient',
+            name: phone,
+            subtitle: 'Patient & Beneficiary'
+          });
+          setActivePortal('patient');
+          setShowPatientOtpLogin(false);
+        }}
+        onBack={() => setShowPatientOtpLogin(false)}
+      />
+    );
+  }
+
+  // Admin dashboard (separate full-page UI)
+  if (userSession && userSession.role === 'admin') {
+    return (
+      <AdminDashboard
+        onLogout={() => setUserSession(null)}
+        userName={userSession.name}
+      />
+    );
+  }
+
+  // If no user is logged in, show the Login Gateway
   if (!userSession) {
     return (
       <LoginDashboard
@@ -52,6 +80,7 @@ export function App() {
           });
           setActivePortal('insurer');
         }}
+        onPatientOtpLogin={() => setShowPatientOtpLogin(true)}
       />
     );
   }
@@ -63,12 +92,12 @@ export function App() {
         activePortal={activePortal}
         setActivePortal={setActivePortal}
         onOpenMCP={() => setIsMCPOpen(true)}
-        onOpenInfographics={() => setIsInfographicsOpen(true)}
+        onOpenInfographics={() => {}}
         userSession={userSession}
         onLogout={() => setUserSession(null)}
       />
 
-      {/* Payer Gateway Simulation & Event Webhook Bar (Only visible in Hospital / Insurer views) */}
+      {/* Payer Gateway Simulation & Event Webhook Bar */}
       {(activePortal === 'hospital' || activePortal === 'insurer') && (
         <BeeceptorBar
           selectedScenario={selectedScenario}
@@ -96,10 +125,6 @@ export function App() {
             onLogout={() => setUserSession(null)}
           />
         )}
-
-        {activePortal === 'trace' && (
-          <TraceCommonsDashboard />
-        )}
       </main>
 
       {/* AI Agent (MCP) Slide-over Drawer */}
@@ -107,12 +132,6 @@ export function App() {
         isOpen={isMCPOpen}
         onClose={() => setIsMCPOpen(false)}
         currentCaseId={selectedCaseId}
-      />
-
-      {/* Interactive Workflow & n8n Infographics Modal */}
-      <WorkflowInfographicsModal
-        isOpen={isInfographicsOpen}
-        onClose={() => setIsInfographicsOpen(false)}
       />
 
       {/* Professional Enterprise Footer */}
