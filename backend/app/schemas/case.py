@@ -96,6 +96,39 @@ class CaseCreate(BaseModel):
     admission_at: Optional[datetime] = None
     line_items: List[LineItemCreate] = []
 
+class CaseUpdate(BaseModel):
+    hospital_id: Optional[str] = None
+    policy_id: Optional[str] = None
+    primary_diagnosis_code: Optional[str] = None
+    primary_diagnosis_name: Optional[str] = None
+    admission_at: Optional[datetime] = None
+    discharge_at: Optional[datetime] = None
+    case_status: Optional[str] = None
+    authorization_status: Optional[str] = None
+    discharge_status: Optional[str] = None
+
+class PolicyBriefResponse(BaseModel):
+    id: str
+    policy_ref: str
+    plan_name: str
+    plan_type: str
+    network_type: str
+    sum_insured: float
+    deductible: float
+    co_pay_pct: float
+    room_rent_cap: float
+    icu_rent_cap: float
+
+    class Config:
+        from_attributes = True
+
+class BlockerCreate(BaseModel):
+    blocker_type: str
+    severity: str = "HIGH"
+    owner_role: str = "HOSPITAL_STAFF"
+    description: str
+    action_required: Optional[str] = None
+
 class ReadinessScoreBreakdown(BaseModel):
     documents_score: float # 35% weight
     clinical_structure_score: float # 20% weight

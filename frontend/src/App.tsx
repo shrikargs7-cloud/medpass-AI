@@ -2,19 +2,51 @@ import React, { useState } from 'react';
 import { Header } from './components/Header';
 import { BeeceptorBar } from './components/BeeceptorBar';
 import { MCPAgentDrawer } from './components/MCPAgentDrawer';
+import { LoginDashboard } from './dashboards/LoginDashboard';
 import { HospitalDashboard } from './dashboards/HospitalDashboard';
 import { InsurerDashboard } from './dashboards/InsurerDashboard';
 import { PatientDashboard } from './dashboards/PatientDashboard';
 import { TraceCommonsDashboard } from './dashboards/TraceCommonsDashboard';
-
 import { PitchBlueprintModal } from './components/PitchBlueprintModal';
 
+interface UserSession {
+  role: 'hospital' | 'patient' | 'insurer' | 'trace';
+  name: string;
+  subtitle?: string;
+}
+
 export function App() {
+  const [userSession, setUserSession] = useState<UserSession | null>(null);
   const [activePortal, setActivePortal] = useState<'hospital' | 'insurer' | 'patient' | 'trace'>('hospital');
   const [selectedScenario, setSelectedScenario] = useState<string>('SUCCESS');
   const [selectedCaseId, setSelectedCaseId] = useState<string | undefined>(undefined);
   const [isMCPOpen, setIsMCPOpen] = useState<boolean>(false);
   const [isPitchOpen, setIsPitchOpen] = useState<boolean>(false);
+
+  // If no user is logged in, show the initial enterprise Login Gateway
+  if (!userSession) {
+    return (
+      <LoginDashboard
+        onLoginHospital={(staff) => {
+          setUserSession({
+            role: 'hospital',
+            name: staff.name,
+            subtitle: `${staff.role} • ${staff.hospital}`
+          });
+          setActivePortal('hospital');
+        }}
+        onLoginPatient={(caseId, patientName) => {
+          setUserSession({
+            role: 'patient',
+            name: patientName,
+            subtitle: 'Patient & Beneficiary'
+          });
+          setSelectedCaseId(caseId);
+          setActivePortal('patient');
+        }}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
@@ -24,13 +56,17 @@ export function App() {
         setActivePortal={setActivePortal}
         onOpenMCP={() => setIsMCPOpen(true)}
         onOpenPitch={() => setIsPitchOpen(true)}
+        userSession={userSession}
+        onLogout={() => setUserSession(null)}
       />
 
-      {/* Beeceptor & n8n Simulation Controller Bar */}
-      <BeeceptorBar
-        selectedScenario={selectedScenario}
-        setSelectedScenario={setSelectedScenario}
-      />
+      {/* Payer Gateway Simulation & Event Webhook Bar (Only visible in Hospital / Insurer views) */}
+      {(activePortal === 'hospital' || activePortal === 'insurer') && (
+        <BeeceptorBar
+          selectedScenario={selectedScenario}
+          setSelectedScenario={setSelectedScenario}
+        />
+      )}
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -47,7 +83,10 @@ export function App() {
         )}
 
         {activePortal === 'patient' && (
-          <PatientDashboard selectedCaseId={selectedCaseId} />
+          <PatientDashboard
+            selectedCaseId={selectedCaseId}
+            onLogout={() => setUserSession(null)}
+          />
         )}
 
         {activePortal === 'trace' && (
@@ -68,11 +107,11 @@ export function App() {
         onClose={() => setIsPitchOpen(false)}
       />
 
-      {/* Footer */}
+      {/* Professional Enterprise Footer */}
       <footer className="bg-white border-t border-slate-200 py-4 px-6 text-center text-xs text-slate-500">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
-          <span>MedPass AI + Trace Commons • Team THE X (RV University) • DSU DEVHACK 3.0</span>
-          <span className="font-mono text-slate-400">IRDAI 1h Preauth & 3h Discharge • DuckDB Analytics</span>
+          <span>MedPass AI Enterprise Healthcare Platform • Hospital & Payer Automation Suite</span>
+          <span className="font-mono text-slate-400">IRDAI Cashless Everywhere • ABDM FHIR Standards • 256-Bit Encrypted</span>
         </div>
       </footer>
     </div>

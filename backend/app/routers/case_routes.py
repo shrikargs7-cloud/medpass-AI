@@ -10,8 +10,9 @@ from backend.app.models.operational import (
     CalculationItem, DischargeBlocker, Claim
 )
 from backend.app.schemas.case import (
-    CaseCreate, CaseDetailResponse, ReadinessScoreBreakdown,
-    CoverageDecisionResponse, DischargeBlockerResponse, ClaimResponseSchema
+    CaseCreate, CaseUpdate, CaseDetailResponse, ReadinessScoreBreakdown,
+    CoverageDecisionResponse, DischargeBlockerResponse, ClaimResponseSchema,
+    LineItemCreate, BlockerCreate, PolicyBriefResponse
 )
 from backend.app.services.policy_engine import DeterministicPolicyEngine
 from backend.app.services.calculation_engine import FinancialCalculationEngine
@@ -333,3 +334,214 @@ def resolve_blocker(case_id: str, blocker_id: str, db: Session = Depends(get_db)
         extra_data={"blocker_id": blocker_id, "type": blocker.blocker_type}
     )
     return {"message": "Blocker marked as resolved", "blocker_id": blocker_id, "is_resolved": True}
+
+def _recalc_and_enrich_case(case: Case, db: Session):
+    """Internal helper to recalculate financials and readiness after any case mutation."""
+    db.query(CoverageDecision).filter(CoverageDecision.case_id == case.id).delete()
+    db.flush()
+
+    if case.policy and case.line_items:
+        calc_res = FinancialCalculationEngine.calculate_case_financials(
+            case.policy, case.line_items, case.primary_diagnosis_code
+        )
+        for ld in calc_res["line_decisions"]:
+            decision = CoverageDecision(
+                case_id=case.id,
+                line_item_id=ld["line_item_id"],
+                decision_status=ld["decision_status"],
+                eligible_amount=ld["eligible_amount"],
+                covered_amount=ld["covered_amount"],
+                patient_payable=ld["patient_payable"],
+                confidence=ld["confidence"],
+                rule_id=ld["rule_id"],
+                policy_field=ld["policy_field"],
+                requires_human_review=ld["requires_human_review"],
+                explanation=ld["explanation"]
+            )
+            db.add(decision)
+            db.flush()
+
+            for stg in ld.get("stages", []):
+                ci = CalculationItem(
+                    decision_id=decision.id,
+                    stage=stg["stage"],
+                    stage_name=stg["stage_name"],
+                    input_amount=stg["input_amount"],
+                    adjustment_amount=stg["adjustment_amount"],
+                    output_amount=stg["output_amount"],
+                    formula=stg.get("formula")
+                )
+                db.add(ci)
+
+    readiness = ReadinessAndBlockerEngine.evaluate_readiness(case)
+    case.readiness_score = readiness["total_score"]
+    case.readiness_band = readiness["band"]
+
+    db.commit()
+    db.refresh(case)
+
+    # Compute runtime totals
+    gross = sum(float(i.gross_amount) for i in (case.line_items or []))
+    covered = sum(float(d.covered_amount) for d in (case.decisions or []))
+    payable = sum(float(d.patient_payable) for d in (case.decisions or []))
+    case.total_gross = gross
+    case.total_covered = covered
+    case.total_patient_payable = payable if covered > 0 else gross
+    return case
+
+@router.put("/{case_id}", response_model=CaseDetailResponse)
+def update_case(case_id: str, payload: CaseUpdate, db: Session = Depends(get_db)):
+    case = db.query(Case).filter((Case.id == case_id) | (Case.case_number == case_id)).first()
+    if not case:
+        raise HTTPException(status_code=404, detail="Case not found")
+
+    if payload.primary_diagnosis_code is not None:
+        case.primary_diagnosis_code = payload.primary_diagnosis_code
+    if payload.primary_diagnosis_name is not None:
+        case.primary_diagnosis_name = payload.primary_diagnosis_name
+    if payload.admission_at is not None:
+        case.admission_at = payload.admission_at
+    if payload.discharge_at is not None:
+        case.discharge_at = payload.discharge_at
+    if payload.case_status is not None:
+        case.case_status = payload.case_status
+    if payload.authorization_status is not None:
+        case.authorization_status = payload.authorization_status
+    if payload.discharge_status is not None:
+        case.discharge_status = payload.discharge_status
+    if payload.policy_id is not None:
+        case.policy_id = payload.policy_id
+    if payload.hospital_id is not None:
+        case.hospital_id = payload.hospital_id
+
+    case = _recalc_and_enrich_case(case, db)
+    TraceEventService.record_event(db, "CASE_UPDATED", case, actor_role="HOSPITAL_STAFF")
+    return case
+
+@router.delete("/{case_id}")
+def delete_case(case_id: str, db: Session = Depends(get_db)):
+    case = db.query(Case).filter((Case.id == case_id) | (Case.case_number == case_id)).first()
+    if not case:
+        raise HTTPException(status_code=404, detail="Case not found")
+
+    case_num = case.case_number
+    db.delete(case)
+    db.commit()
+
+    return {"status": "deleted", "case_id": case_id, "case_number": case_num}
+
+@router.post("/{case_id}/line-items", response_model=CaseDetailResponse)
+def add_line_item(case_id: str, item: LineItemCreate, db: Session = Depends(get_db)):
+    case = db.query(Case).filter((Case.id == case_id) | (Case.case_number == case_id)).first()
+    if not case:
+        raise HTTPException(status_code=404, detail="Case not found")
+
+    gross = item.unit_amount * item.quantity
+    new_item = TreatmentLineItem(
+        case_id=case.id,
+        category=item.category,
+        code=item.code,
+        code_system=item.code_system,
+        description=item.description,
+        quantity=item.quantity,
+        unit_amount=item.unit_amount,
+        gross_amount=gross,
+        performed_at=item.performed_at or datetime.utcnow()
+    )
+    db.add(new_item)
+    db.flush()
+
+    case = _recalc_and_enrich_case(case, db)
+    return case
+
+@router.put("/{case_id}/line-items/{item_id}", response_model=CaseDetailResponse)
+def update_line_item(case_id: str, item_id: str, item: LineItemCreate, db: Session = Depends(get_db)):
+    case = db.query(Case).filter((Case.id == case_id) | (Case.case_number == case_id)).first()
+    if not case:
+        raise HTTPException(status_code=404, detail="Case not found")
+
+    db_item = db.query(TreatmentLineItem).filter(
+        TreatmentLineItem.id == item_id,
+        TreatmentLineItem.case_id == case.id
+    ).first()
+    if not db_item:
+        raise HTTPException(status_code=404, detail="Line item not found")
+
+    db_item.category = item.category
+    db_item.code = item.code
+    db_item.code_system = item.code_system
+    db_item.description = item.description
+    db_item.quantity = item.quantity
+    db_item.unit_amount = item.unit_amount
+    db_item.gross_amount = item.unit_amount * item.quantity
+    db.flush()
+
+    case = _recalc_and_enrich_case(case, db)
+    return case
+
+@router.delete("/{case_id}/line-items/{item_id}", response_model=CaseDetailResponse)
+def delete_line_item(case_id: str, item_id: str, db: Session = Depends(get_db)):
+    case = db.query(Case).filter((Case.id == case_id) | (Case.case_number == case_id)).first()
+    if not case:
+        raise HTTPException(status_code=404, detail="Case not found")
+
+    db_item = db.query(TreatmentLineItem).filter(
+        TreatmentLineItem.id == item_id,
+        TreatmentLineItem.case_id == case.id
+    ).first()
+    if not db_item:
+        raise HTTPException(status_code=404, detail="Line item not found")
+
+    db.delete(db_item)
+    db.flush()
+
+    case = _recalc_and_enrich_case(case, db)
+    return case
+
+@router.post("/{case_id}/blockers", response_model=CaseDetailResponse)
+def add_case_blocker(case_id: str, payload: BlockerCreate, db: Session = Depends(get_db)):
+    case = db.query(Case).filter((Case.id == case_id) | (Case.case_number == case_id)).first()
+    if not case:
+        raise HTTPException(status_code=404, detail="Case not found")
+
+    blocker = DischargeBlocker(
+        case_id=case.id,
+        blocker_type=payload.blocker_type,
+        severity=payload.severity,
+        owner_role=payload.owner_role,
+        description=payload.description,
+        action_required=payload.action_required
+    )
+    db.add(blocker)
+    db.commit()
+
+    case = _recalc_and_enrich_case(case, db)
+    return case
+
+@router.delete("/{case_id}/blockers/{blocker_id}", response_model=CaseDetailResponse)
+def delete_case_blocker(case_id: str, blocker_id: str, db: Session = Depends(get_db)):
+    case = db.query(Case).filter((Case.id == case_id) | (Case.case_number == case_id)).first()
+    if not case:
+        raise HTTPException(status_code=404, detail="Case not found")
+
+    b = db.query(DischargeBlocker).filter(
+        DischargeBlocker.id == blocker_id,
+        DischargeBlocker.case_id == case.id
+    ).first()
+    if b:
+        db.delete(b)
+        db.commit()
+
+    case = _recalc_and_enrich_case(case, db)
+    return case
+
+@router.get("/aux/policies", response_model=List[PolicyBriefResponse])
+def get_available_policies(db: Session = Depends(get_db)):
+    policies = db.query(Policy).all()
+    return policies
+
+@router.get("/aux/hospitals")
+def get_available_hospitals(db: Session = Depends(get_db)):
+    hospitals = db.query(Hospital).all()
+    return [{"id": h.id, "name": h.name, "hospital_tier": h.hospital_tier} for h in hospitals]
+

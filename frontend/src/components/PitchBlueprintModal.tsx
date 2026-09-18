@@ -21,14 +21,14 @@ export const PitchBlueprintModal: React.FC<PitchBlueprintModalProps> = ({ isOpen
         <div className="flex items-center justify-between pb-4 border-b border-slate-200">
           <div className="flex items-center space-x-3">
             <div className="px-3 py-1 bg-teal-600 text-white font-bold text-xs rounded-lg shadow-sm">
-              THE X
+              ARCHITECTURE
             </div>
             <div>
               <div className="flex items-center space-x-2">
                 <span className="font-bold text-base text-slate-900">MedPass AI — Bridging the Healthcare Authorization Gap</span>
-                <span className="text-xs font-semibold px-2 py-0.5 rounded bg-teal-100 text-teal-800">DSU DEVHACK 3.0</span>
+                <span className="text-xs font-semibold px-2 py-0.5 rounded bg-teal-100 text-teal-800">Enterprise Specification</span>
               </div>
-              <p className="text-xs text-slate-500">RV University, Bengaluru, Karnataka • Healthcare Track Baseline Deck</p>
+              <p className="text-xs text-slate-500">Autonomous Hospital Revenue Cycle & National Health Claims Adjudication Architecture</p>
             </div>
           </div>
           <button

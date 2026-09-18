@@ -30,6 +30,76 @@ export async function createCase(payload: any): Promise<CaseDetail> {
   return res.json();
 }
 
+export async function updateCase(caseId: string, payload: any): Promise<CaseDetail> {
+  const res = await fetch(`${API_BASE}/cases/${caseId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok) throw new Error('Failed to update case');
+  return res.json();
+}
+
+export async function deleteCase(caseId: string): Promise<any> {
+  const res = await fetch(`${API_BASE}/cases/${caseId}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error('Failed to delete case');
+  return res.json();
+}
+
+export async function addLineItem(caseId: string, item: any): Promise<CaseDetail> {
+  const res = await fetch(`${API_BASE}/cases/${caseId}/line-items`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(item)
+  });
+  if (!res.ok) throw new Error('Failed to add line item');
+  return res.json();
+}
+
+export async function updateLineItem(caseId: string, itemId: string, item: any): Promise<CaseDetail> {
+  const res = await fetch(`${API_BASE}/cases/${caseId}/line-items/${itemId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(item)
+  });
+  if (!res.ok) throw new Error('Failed to update line item');
+  return res.json();
+}
+
+export async function deleteLineItem(caseId: string, itemId: string): Promise<CaseDetail> {
+  const res = await fetch(`${API_BASE}/cases/${caseId}/line-items/${itemId}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error('Failed to delete line item');
+  return res.json();
+}
+
+export async function addBlocker(caseId: string, blocker: any): Promise<CaseDetail> {
+  const res = await fetch(`${API_BASE}/cases/${caseId}/blockers`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(blocker)
+  });
+  if (!res.ok) throw new Error('Failed to add blocker');
+  return res.json();
+}
+
+export async function deleteBlocker(caseId: string, blockerId: string): Promise<CaseDetail> {
+  const res = await fetch(`${API_BASE}/cases/${caseId}/blockers/${blockerId}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error('Failed to delete blocker');
+  return res.json();
+}
+
+export async function fetchAvailablePolicies(): Promise<any[]> {
+  const res = await fetch(`${API_BASE}/cases/aux/policies`);
+  if (!res.ok) throw new Error('Failed to fetch policies');
+  return res.json();
+}
+
+export async function fetchAvailableHospitals(): Promise<any[]> {
+  const res = await fetch(`${API_BASE}/cases/aux/hospitals`);
+  if (!res.ok) throw new Error('Failed to fetch hospitals');
+  return res.json();
+}
+
 export async function evaluateCase(caseId: string): Promise<CaseDetail> {
   const res = await fetch(`${API_BASE}/cases/${caseId}/evaluate`, { method: 'POST' });
   if (!res.ok) throw new Error('Failed to evaluate case');

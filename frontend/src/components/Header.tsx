@@ -1,7 +1,7 @@
 import React from 'react';
 import {
   Activity, Shield, User, Database, Bot,
-  Layers, ExternalLink, Zap
+  Layers, LogOut, CheckCircle2, Lock
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -9,45 +9,41 @@ interface HeaderProps {
   setActivePortal: (portal: 'hospital' | 'insurer' | 'patient' | 'trace') => void;
   onOpenMCP: () => void;
   onOpenPitch: () => void;
+  userSession?: { role: string; name: string; subtitle?: string } | null;
+  onLogout?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   activePortal,
   setActivePortal,
   onOpenMCP,
-  onOpenPitch
+  onOpenPitch,
+  userSession,
+  onLogout
 }) => {
   return (
-    <header className="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-xs">
-      {/* Top Track & Compliance Banner */}
+    <header className="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-xs font-sans">
+      {/* Top Enterprise Compliance & Gateway Status Banner */}
       <div className="bg-slate-900 text-slate-300 text-xs px-4 py-1.5 flex items-center justify-between">
         <div className="flex items-center space-x-3 overflow-x-auto">
           <span className="font-semibold text-white flex items-center">
-            <Shield className="w-3.5 h-3.5 text-teal-400 mr-1" /> DSU DEVHACK 3.0:
+            <CheckCircle2 className="w-3.5 h-3.5 text-teal-400 mr-1.5" />
+            MedPass Enterprise Health Suite v2.4
           </span>
-          <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-slate-800 text-teal-300 border border-teal-500/30">
-            THE X (RV University)
+          <span className="text-slate-600 hidden sm:inline">•</span>
+          <span className="inline-flex items-center px-2 py-0.5 rounded bg-slate-800 text-teal-300 border border-teal-500/30 text-[11px]">
+            National Health Exchange (NHCX): Connected
           </span>
-          <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-slate-800 text-amber-300 border border-amber-500/30">
-            Beeceptor Mocking
-          </span>
-          <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-slate-800 text-purple-300 border border-purple-500/30">
-            Render Cloud
-          </span>
-          <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-slate-800 text-rose-300 border border-rose-500/30">
-            n8n Automation
-          </span>
-          <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-slate-800 text-blue-300 border border-blue-500/30">
-            Trace Commons $100 Award
+          <span className="inline-flex items-center px-2 py-0.5 rounded bg-slate-800 text-emerald-300 border border-emerald-500/30 text-[11px]">
+            IRDAI 1h Preauth SLA Active
           </span>
         </div>
-        <div className="hidden md:flex items-center space-x-3 text-slate-400">
-          <span className="flex items-center text-teal-400 font-mono">
+
+        <div className="hidden md:flex items-center space-x-3 text-slate-400 text-xs">
+          <span className="flex items-center text-teal-400 font-mono text-[11px]">
             <span className="w-2 h-2 rounded-full bg-teal-400 animate-pulse mr-1.5"></span>
-            IRDAI & DPDP COMPLIANT
+            256-Bit HIPAA / ABDM Compliant
           </span>
-          <span className="text-slate-600">|</span>
-          <span>FastAPI + DuckDB + Parquet</span>
         </div>
       </div>
 
@@ -60,11 +56,11 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
             <div>
               <div className="flex items-center space-x-2">
-                <span className="font-bold text-xl tracking-tight text-slate-900">MedPass AI</span>
+                <span className="font-extrabold text-xl tracking-tight text-slate-900">MedPass AI</span>
                 <span className="text-slate-400 font-light">+</span>
                 <span className="font-semibold text-lg text-teal-700">Trace Commons</span>
               </div>
-              <p className="text-[11px] text-slate-500 font-medium">Healthcare Workflow & Governed Open-Data Platform</p>
+              <p className="text-[11px] text-slate-500 font-medium">Healthcare Hospital & Insurance Workflow Suite</p>
             </div>
           </div>
 
@@ -72,7 +68,7 @@ export const Header: React.FC<HeaderProps> = ({
           <nav className="flex items-center space-x-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
             <button
               onClick={() => setActivePortal('hospital')}
-              className={`flex items-center px-3.5 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+              className={`flex items-center px-3 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                 activePortal === 'hospital'
                   ? 'bg-white text-teal-900 shadow-xs border border-slate-200/80'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
@@ -84,7 +80,7 @@ export const Header: React.FC<HeaderProps> = ({
 
             <button
               onClick={() => setActivePortal('insurer')}
-              className={`flex items-center px-3.5 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+              className={`flex items-center px-3 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                 activePortal === 'insurer'
                   ? 'bg-white text-indigo-900 shadow-xs border border-slate-200/80'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
@@ -96,7 +92,7 @@ export const Header: React.FC<HeaderProps> = ({
 
             <button
               onClick={() => setActivePortal('patient')}
-              className={`flex items-center px-3.5 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+              className={`flex items-center px-3 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                 activePortal === 'patient'
                   ? 'bg-white text-emerald-900 shadow-xs border border-slate-200/80'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
@@ -108,7 +104,7 @@ export const Header: React.FC<HeaderProps> = ({
 
             <button
               onClick={() => setActivePortal('trace')}
-              className={`flex items-center px-3.5 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+              className={`flex items-center px-3 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                 activePortal === 'trace'
                   ? 'bg-white text-blue-900 shadow-xs border border-slate-200/80'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
@@ -116,18 +112,27 @@ export const Header: React.FC<HeaderProps> = ({
             >
               <Database className="w-4 h-4 mr-1.5 text-blue-600" />
               Trace Commons
-              <span className="ml-1.5 px-1.5 py-0.2 rounded-full text-[10px] bg-blue-100 text-blue-800 font-bold">Data</span>
             </button>
           </nav>
 
-          {/* Blueprint Modal & AI Assistant MCP Trigger */}
-          <div className="flex items-center space-x-2">
+          {/* User Session & Utility Buttons */}
+          <div className="flex items-center space-x-2.5">
+            {userSession && (
+              <div className="hidden xl:flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <div className="text-left">
+                  <div className="font-bold text-slate-800 text-[11px] leading-tight">{userSession.name}</div>
+                  <div className="text-[10px] text-slate-500 leading-tight">{userSession.subtitle || userSession.role}</div>
+                </div>
+              </div>
+            )}
+
             <button
               onClick={onOpenPitch}
               className="flex items-center px-3 py-2 rounded-xl text-xs font-semibold bg-slate-100 text-slate-800 hover:bg-slate-200 transition-all border border-slate-200 cursor-pointer"
             >
               <Layers className="w-3.5 h-3.5 mr-1.5 text-teal-600" />
-              Pitch Blueprint
+              Architecture
             </button>
 
             <button
@@ -135,8 +140,18 @@ export const Header: React.FC<HeaderProps> = ({
               className="flex items-center px-3.5 py-2 rounded-xl text-xs font-semibold bg-gradient-to-r from-teal-600 to-teal-700 text-white shadow-sm hover:from-teal-700 hover:to-teal-800 transition-all cursor-pointer"
             >
               <Bot className="w-4 h-4 mr-1.5" />
-              Ask AI Agent (MCP)
+              AI Agent (MCP)
             </button>
+
+            {onLogout && (
+              <button
+                onClick={onLogout}
+                title="Switch role or log out"
+                className="p-2 rounded-xl text-slate-500 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 transition-all cursor-pointer"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </div>
       </div>

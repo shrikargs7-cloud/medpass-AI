@@ -1,16 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Heart, ShieldCheck, CheckCircle2, Clock,
-  AlertCircle, DollarSign, ArrowRight, UserCheck
+  Heart, ShieldCheck, CheckCircle2, Clock, AlertCircle,
+  DollarSign, ArrowRight, UserCheck, HelpCircle, FileText,
+  Printer, LogOut, Info, AlertTriangle
 } from 'lucide-react';
 import { CaseDetail } from '../types';
 import { fetchCases, fetchCaseDetail } from '../api/client';
 
 interface PatientDashboardProps {
   selectedCaseId?: string;
+  onLogout?: () => void;
 }
 
-export const PatientDashboard: React.FC<PatientDashboardProps> = ({ selectedCaseId }) => {
+export const PatientDashboard: React.FC<PatientDashboardProps> = ({
+  selectedCaseId,
+  onLogout
+}) => {
   const [patientCase, setPatientCase] = useState<CaseDetail | null>(null);
   const [allCases, setAllCases] = useState<CaseDetail[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,164 +35,242 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({ selectedCase
   }, [selectedCaseId]);
 
   if (loading || !patientCase) {
-    return <div className="p-8 text-center text-slate-500 text-xs">Loading patient journey...</div>;
+    return (
+      <div className="py-20 text-center text-slate-500 text-sm font-medium">
+        Loading your insurance coverage details...
+      </div>
+    );
   }
 
   const patient = patientCase.patient;
   const activeBlockers = patientCase.blockers?.filter((b) => !b.is_resolved) || [];
+  const percentCovered = patientCase.total_gross > 0
+    ? Math.round((patientCase.total_covered / patientCase.total_gross) * 100)
+    : 0;
 
-  // Plain English blocker translation
-  let blockerSummary = "All verifications are progressing smoothly.";
-  if (activeBlockers.length > 0) {
-    const top = activeBlockers[0];
-    if (top.blocker_type === 'MISSING_DOCUMENT') {
-      blockerSummary = "The hospital team is attaching one clinical document requested by your insurance provider.";
-    } else if (top.blocker_type === 'INSURER_QUERY') {
-      blockerSummary = "Your insurance provider requested clinical clarification. Hospital insurance desk is preparing the response.";
-    } else if (top.blocker_type === 'INSURANCE_AUTHORIZATION') {
-      blockerSummary = "Your hospital has submitted pre-authorization. Awaiting initial confirmation from your insurer.";
-    } else if (top.blocker_type === 'BILLING_CLEARANCE') {
-      blockerSummary = "Medical care is complete. Hospital billing desk is finalizing the discharge account.";
-    }
+  // Plain English explanation for any active clearance step
+  let statusSummary = "Your insurance verification is fully approved and you are cleared for discharge!";
+  if (patientCase.authorization_status === 'QUERY_RAISED') {
+    statusSummary = "Your insurance company requested routine medical lab notes from the hospital desk. Hospital staff is already submitting them.";
+  } else if (patientCase.authorization_status === 'PREAUTH_REQUESTED' || patientCase.authorization_status === 'PENDING') {
+    statusSummary = "Hospital submitted your cashless claim. Awaiting final confirmation from your insurer under IRDAI 1-hour fast-track guidelines.";
+  } else if (activeBlockers.length > 0) {
+    statusSummary = "Medical treatment is complete. The hospital billing desk is preparing the final discharge package.";
   }
 
-  // Stepper stages
-  const stages = [
-    { name: 'Admission', completed: true, current: false },
-    { name: 'Treatment & Care', completed: true, current: false },
-    {
-      name: 'Insurance Authorization',
-      completed: patientCase.authorization_status === 'APPROVED',
-      current: patientCase.authorization_status === 'PREAUTH_REQUESTED' || patientCase.authorization_status === 'QUERY_RAISED'
-    },
-    {
-      name: 'Billing Settlement',
-      completed: patientCase.discharge_status === 'READY',
-      current: patientCase.authorization_status === 'APPROVED' && patientCase.discharge_status !== 'READY'
-    },
-    {
-      name: 'Discharge Ready',
-      completed: patientCase.discharge_status === 'READY',
-      current: false
-    }
-  ];
+  const handlePrint = () => {
+    window.print();
+  };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      {/* Patient Greeting & Case Selector */}
-      <div className="bg-gradient-to-r from-emerald-600 to-teal-700 text-white p-6 rounded-2xl shadow-md">
+    <div className="max-w-4xl mx-auto space-y-6 font-sans">
+      {/* Patient Greeting & Case Identity Bar */}
+      <div className="bg-gradient-to-r from-emerald-700 via-teal-700 to-slate-900 text-white p-6 rounded-3xl shadow-lg border border-teal-600/30">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <div className="flex items-center space-x-2">
-              <span className="text-xs uppercase tracking-wider bg-white/20 px-2 py-0.5 rounded font-bold">
-                Patient Care Portal
+              <span className="text-[10px] uppercase font-extrabold tracking-wider bg-white/20 text-emerald-100 px-2.5 py-0.5 rounded-full">
+                Patient Claim & Coverage Tracker
               </span>
-              <span className="text-xs text-teal-100 font-mono">Reference: {patient.patient_ref}</span>
+              <span className="text-xs text-teal-200 font-mono">Case #{patientCase.case_number}</span>
             </div>
-            <h1 className="text-2xl font-bold mt-1">Hello, {patient.full_name}</h1>
-            <p className="text-xs text-teal-100 mt-0.5">
-              Tracking admission for <strong>{patientCase.primary_diagnosis_name}</strong> at Apollo Healthcare
+            <h1 className="text-2xl sm:text-3xl font-extrabold mt-1.5 text-white">
+              Hello, {patient.full_name}
+            </h1>
+            <p className="text-xs text-teal-100 mt-1">
+              Admission for <strong>{patientCase.primary_diagnosis_name || 'Hospital Care'}</strong> • Apollo Multi-Specialty Hospital
             </p>
           </div>
 
-          {/* Quick Case Switcher for Demo */}
-          <div className="bg-white/10 p-2 rounded-xl border border-white/20 text-xs">
-            <span className="block text-[10px] text-teal-100 uppercase tracking-wider font-semibold mb-1">
-              Select Patient Case Demo:
-            </span>
-            <select
-              value={patientCase.id}
-              onChange={(e) => {
-                const found = allCases.find((c) => c.id === e.target.value);
-                if (found) fetchCaseDetail(found.id).then(setPatientCase);
-              }}
-              className="bg-teal-900/80 text-white text-xs p-1.5 rounded-lg border border-teal-400/40 focus:outline-hidden"
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={handlePrint}
+              className="flex items-center px-3 py-2 rounded-xl text-xs font-semibold bg-white/10 hover:bg-white/20 text-white transition-all cursor-pointer border border-white/20"
             >
-              {allCases.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.case_number} ({c.patient.full_name})
-                </option>
-              ))}
-            </select>
+              <Printer className="w-3.5 h-3.5 mr-1.5" />
+              Print Summary
+            </button>
+
+            {onLogout && (
+              <button
+                onClick={onLogout}
+                className="flex items-center px-3 py-2 rounded-xl text-xs font-semibold bg-white/10 hover:bg-white/20 text-white transition-all cursor-pointer border border-white/20"
+              >
+                <LogOut className="w-3.5 h-3.5 mr-1.5" />
+                Switch Account
+              </button>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Financial Breakdown Cards in Plain English */}
+      {/* Hero Financial Cards: The Core Question Answered */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs">
-          <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Estimated Total Bill</span>
-          <div className="text-2xl font-bold text-slate-900 mt-1">
+        {/* Card 1: Total Hospital Bill */}
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs">
+          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
+            Total Hospital Bill
+          </span>
+          <div className="text-2xl sm:text-3xl font-black text-slate-900 mt-1">
             ₹{patientCase.total_gross.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
           </div>
-          <p className="text-[11px] text-slate-500 mt-1">Includes room, surgery, medications, and care.</p>
+          <p className="text-[11px] text-slate-500 mt-1">
+            Gross charges including room, medications, and clinical care.
+          </p>
         </div>
 
-        <div className="bg-emerald-50/80 p-5 rounded-xl border border-emerald-200 shadow-2xs">
-          <span className="text-xs font-semibold text-emerald-800 uppercase tracking-wider flex items-center">
-            <ShieldCheck className="w-3.5 h-3.5 mr-1 text-emerald-600" />
-            Approved by Insurance
+        {/* Card 2: Covered by Insurance */}
+        <div className="bg-gradient-to-br from-emerald-50 to-teal-50/80 p-5 rounded-2xl border-2 border-emerald-500/40 shadow-xs">
+          <span className="text-xs font-extrabold text-emerald-800 uppercase tracking-wider flex items-center">
+            <ShieldCheck className="w-4 h-4 mr-1 text-emerald-600" />
+            Covered by Insurance Company
           </span>
-          <div className="text-2xl font-bold text-emerald-700 mt-1">
+          <div className="text-2xl sm:text-3xl font-black text-emerald-700 mt-1">
             ₹{patientCase.total_covered.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
           </div>
-          <p className="text-[11px] text-emerald-700 mt-1">Directly covered by your Star Health policy.</p>
+          <div className="mt-1 flex items-center justify-between text-[11px] text-emerald-800 font-semibold">
+            <span>Direct Cashless Settlement</span>
+            <span className="px-1.5 py-0.5 rounded bg-emerald-200/60 font-bold">{percentCovered}% of Bill</span>
+          </div>
         </div>
 
-        <div className="bg-amber-50/80 p-5 rounded-xl border border-amber-200 shadow-2xs">
-          <span className="text-xs font-semibold text-amber-800 uppercase tracking-wider">
-            Your Estimated Out-of-Pocket
+        {/* Card 3: Amount Patient Has to Pay */}
+        <div className="bg-gradient-to-br from-amber-50 to-orange-50/80 p-5 rounded-2xl border-2 border-amber-500/40 shadow-xs">
+          <span className="text-xs font-extrabold text-amber-900 uppercase tracking-wider flex items-center">
+            <DollarSign className="w-4 h-4 mr-0.5 text-amber-600" />
+            Amount You Have to Pay
           </span>
-          <div className="text-2xl font-bold text-amber-700 mt-1">
+          <div className="text-2xl sm:text-3xl font-black text-amber-800 mt-1">
             ₹{patientCase.total_patient_payable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
           </div>
-          <p className="text-[11px] text-amber-700 mt-1">Due to policy deductible, co-pay, or room cap difference.</p>
+          <p className="text-[11px] text-amber-800 font-medium mt-1">
+            Your remaining out-of-pocket payable to hospital at discharge.
+          </p>
         </div>
       </div>
 
-      {/* Current Status Notice */}
-      <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Current Status & Action</h3>
-        <div className="flex items-start space-x-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200/80">
-          <AlertCircle className="w-5 h-5 text-teal-600 shrink-0 mt-0.5" />
-          <div>
-            <div className="font-semibold text-xs text-slate-900">
-              {activeBlockers.length === 0
-                ? 'Ready for Discharge Settlement'
-                : 'Insurance Verification in Progress'}
-            </div>
-            <p className="text-xs text-slate-600 mt-0.5 leading-relaxed">
-              {blockerSummary}
+      {/* Coverage Progress Bar */}
+      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs">
+        <div className="flex items-center justify-between text-xs font-bold mb-2">
+          <span className="text-slate-700">Insurance Coverage Progress</span>
+          <span className="text-emerald-700">{percentCovered}% Paid by Insurance</span>
+        </div>
+        <div className="w-full h-3.5 bg-slate-100 rounded-full overflow-hidden flex">
+          <div
+            className="bg-emerald-500 h-full transition-all duration-700"
+            style={{ width: `${percentCovered}%` }}
+          />
+          <div
+            className="bg-amber-400 h-full transition-all duration-700"
+            style={{ width: `${100 - percentCovered}%` }}
+          />
+        </div>
+        <div className="flex items-center justify-between text-[11px] text-slate-500 mt-2">
+          <div className="flex items-center space-x-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" />
+            <span>Insurance Pays: ₹{patientCase.total_covered.toLocaleString('en-IN')}</span>
+          </div>
+          <div className="flex items-center space-x-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block" />
+            <span>You Pay: ₹{patientCase.total_patient_payable.toLocaleString('en-IN')}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* "Why Do I Pay This Amount?" Transparent Breakdown */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs space-y-3">
+        <div className="flex items-center space-x-2">
+          <HelpCircle className="w-5 h-5 text-teal-600" />
+          <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
+            Why Do I Have to Pay ₹{patientCase.total_patient_payable.toLocaleString('en-IN')}?
+          </h2>
+        </div>
+        <p className="text-xs text-slate-600 leading-relaxed">
+          In accordance with your health insurance policy terms and IRDAI guidelines, here is the exact reason for the out-of-pocket amount:
+        </p>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
+          <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+            <span className="font-bold text-slate-900 block mb-1">1. Room Rent Limit Cap</span>
+            <p className="text-slate-500 text-[11px]">
+              If your chosen room tier exceeds your policy's daily room limit (e.g. ₹5,000/day cap vs ₹10,000/day room), the difference is borne by the patient.
+            </p>
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+            <span className="font-bold text-slate-900 block mb-1">2. Mandatory Policy Co-Pay</span>
+            <p className="text-slate-500 text-[11px]">
+              Certain plans require a 10% or 15% patient co-share for surgical procedures or senior citizens.
+            </p>
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+            <span className="font-bold text-slate-900 block mb-1">3. Non-Medical Items</span>
+            <p className="text-slate-500 text-[11px]">
+              Consumables such as admission kits, sanitization charges, or administrative documentation fees not payable by standard insurance.
             </p>
           </div>
         </div>
       </div>
 
-      {/* Journey Stepper */}
-      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-2xs">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-6">Care & Insurance Timeline</h3>
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 relative">
-          {stages.map((stg, idx) => (
-            <div key={idx} className="flex flex-col items-center text-center relative z-10">
-              <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
-                  stg.completed
-                    ? 'bg-emerald-600 text-white shadow-xs'
-                    : stg.current
-                    ? 'bg-amber-500 text-white animate-pulse ring-4 ring-amber-100'
-                    : 'bg-slate-100 text-slate-400 border border-slate-200'
-                }`}
-              >
-                {stg.completed ? <CheckCircle2 className="w-4 h-4" /> : idx + 1}
+      {/* Itemized Plain-Language Coverage Table */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs">
+        <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-4">
+          Detailed Item Breakdown
+        </h2>
+
+        <div className="divide-y divide-slate-100">
+          {patientCase.line_items?.map((item) => {
+            const dec = patientCase.decisions?.find((d) => d.line_item_id === item.id);
+            const isFullyCovered = dec && dec.patient_payable === 0;
+
+            return (
+              <div key={item.id} className="py-3.5 flex flex-wrap items-center justify-between gap-3 text-xs">
+                <div>
+                  <div className="font-bold text-slate-900 text-sm">{item.description}</div>
+                  <div className="text-slate-500 text-[11px] mt-0.5">
+                    Category: <span className="font-semibold text-slate-700">{item.category}</span> • Qty: {item.quantity}
+                  </div>
+                  {dec?.explanation && (
+                    <div className="text-[11px] text-teal-800 bg-teal-50 px-2 py-0.5 rounded-md mt-1 inline-block">
+                      {dec.explanation}
+                    </div>
+                  )}
+                </div>
+
+                <div className="text-right">
+                  <div className="text-xs text-slate-400">Total: ₹{item.gross_amount.toLocaleString('en-IN')}</div>
+                  <div className="mt-0.5">
+                    <span className="text-emerald-700 font-bold">
+                      Insurance Pays: ₹{dec ? dec.covered_amount.toLocaleString('en-IN') : item.gross_amount.toLocaleString('en-IN')}
+                    </span>
+                  </div>
+                  <div className="mt-0.5">
+                    <span className={`font-bold ${isFullyCovered ? 'text-slate-400' : 'text-amber-800'}`}>
+                      You Pay: ₹{dec ? dec.patient_payable.toLocaleString('en-IN') : '0'}
+                    </span>
+                  </div>
+                </div>
               </div>
-              <span className={`text-xs font-semibold mt-2.5 ${stg.current ? 'text-amber-700' : stg.completed ? 'text-slate-900' : 'text-slate-400'}`}>
-                {stg.name}
-              </span>
-              <span className="text-[10px] text-slate-400 mt-0.5">
-                {stg.completed ? 'Completed' : stg.current ? 'Active stage' : 'Upcoming'}
-              </span>
-            </div>
-          ))}
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Real-time Status Notice */}
+      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs">
+        <div className="flex items-start space-x-3">
+          <div className="p-2 rounded-xl bg-teal-50 text-teal-700 shrink-0 mt-0.5">
+            <Clock className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900">
+              Live Claim Status & Discharge Outlook
+            </h3>
+            <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+              {statusSummary}
+            </p>
+          </div>
         </div>
       </div>
     </div>
