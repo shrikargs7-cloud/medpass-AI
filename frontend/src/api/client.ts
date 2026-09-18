@@ -7,38 +7,19 @@ const API_BASE = import.meta.env.VITE_API_URL
   ? `${import.meta.env.VITE_API_URL.replace(/\/$/, '')}/api`
   : '/api';
 
-async function handleResponse<T>(res: Response, defaultErrMsg: string): Promise<T> {
-  const text = await res.text();
-  let data: any;
-  try {
-    data = text ? JSON.parse(text) : {};
-  } catch {
-    data = null;
-  }
-
-  if (!res.ok) {
-    const errorMsg = data?.detail || data?.message || `${defaultErrMsg} (HTTP ${res.status})`;
-    throw new Error(typeof errorMsg === 'string' ? errorMsg : defaultErrMsg);
-  }
-
-  if (data === null) {
-    throw new Error(`${defaultErrMsg}: Server returned empty or non-JSON response (HTTP ${res.status})`);
-  }
-
-  return data as T;
-}
-
 export async function fetchCases(status?: string, band?: string): Promise<CaseDetail[]> {
   const params = new URLSearchParams();
   if (status) params.append('status', status);
   if (band) params.append('band', band);
   const res = await fetch(`${API_BASE}/cases?${params.toString()}`);
-  return handleResponse<CaseDetail[]>(res, 'Failed to fetch cases');
+  if (!res.ok) throw new Error('Failed to fetch cases');
+  return res.json();
 }
 
 export async function fetchCaseDetail(caseId: string): Promise<CaseDetail> {
   const res = await fetch(`${API_BASE}/cases/${caseId}`);
-  return handleResponse<CaseDetail>(res, 'Failed to fetch case detail');
+  if (!res.ok) throw new Error('Failed to fetch case detail');
+  return res.json();
 }
 
 export async function createCase(payload: any): Promise<CaseDetail> {
@@ -47,7 +28,8 @@ export async function createCase(payload: any): Promise<CaseDetail> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
   });
-  return handleResponse<CaseDetail>(res, 'Failed to create case');
+  if (!res.ok) throw new Error('Failed to create case');
+  return res.json();
 }
 
 export async function updateCase(caseId: string, payload: any): Promise<CaseDetail> {
@@ -56,12 +38,14 @@ export async function updateCase(caseId: string, payload: any): Promise<CaseDeta
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
   });
-  return handleResponse<CaseDetail>(res, 'Failed to update case');
+  if (!res.ok) throw new Error('Failed to update case');
+  return res.json();
 }
 
 export async function deleteCase(caseId: string): Promise<any> {
   const res = await fetch(`${API_BASE}/cases/${caseId}`, { method: 'DELETE' });
-  return handleResponse<any>(res, 'Failed to delete case');
+  if (!res.ok) throw new Error('Failed to delete case');
+  return res.json();
 }
 
 export async function addLineItem(caseId: string, item: any): Promise<CaseDetail> {
@@ -70,7 +54,8 @@ export async function addLineItem(caseId: string, item: any): Promise<CaseDetail
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(item)
   });
-  return handleResponse<CaseDetail>(res, 'Failed to add line item');
+  if (!res.ok) throw new Error('Failed to add line item');
+  return res.json();
 }
 
 export async function updateLineItem(caseId: string, itemId: string, item: any): Promise<CaseDetail> {
@@ -79,12 +64,14 @@ export async function updateLineItem(caseId: string, itemId: string, item: any):
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(item)
   });
-  return handleResponse<CaseDetail>(res, 'Failed to update line item');
+  if (!res.ok) throw new Error('Failed to update line item');
+  return res.json();
 }
 
 export async function deleteLineItem(caseId: string, itemId: string): Promise<CaseDetail> {
   const res = await fetch(`${API_BASE}/cases/${caseId}/line-items/${itemId}`, { method: 'DELETE' });
-  return handleResponse<CaseDetail>(res, 'Failed to delete line item');
+  if (!res.ok) throw new Error('Failed to delete line item');
+  return res.json();
 }
 
 export async function addBlocker(caseId: string, blocker: any): Promise<CaseDetail> {
@@ -93,17 +80,20 @@ export async function addBlocker(caseId: string, blocker: any): Promise<CaseDeta
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(blocker)
   });
-  return handleResponse<CaseDetail>(res, 'Failed to add blocker');
+  if (!res.ok) throw new Error('Failed to add blocker');
+  return res.json();
 }
 
 export async function deleteBlocker(caseId: string, blockerId: string): Promise<CaseDetail> {
   const res = await fetch(`${API_BASE}/cases/${caseId}/blockers/${blockerId}`, { method: 'DELETE' });
-  return handleResponse<CaseDetail>(res, 'Failed to delete blocker');
+  if (!res.ok) throw new Error('Failed to delete blocker');
+  return res.json();
 }
 
 export async function fetchAvailablePolicies(): Promise<any[]> {
   const res = await fetch(`${API_BASE}/cases/aux/policies`);
-  return handleResponse<any[]>(res, 'Failed to fetch policies');
+  if (!res.ok) throw new Error('Failed to fetch policies');
+  return res.json();
 }
 
 export async function createPolicy(payload: any): Promise<any> {
@@ -112,32 +102,41 @@ export async function createPolicy(payload: any): Promise<any> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
   });
-  return handleResponse<any>(res, 'Failed to create policy');
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Failed to create policy');
+  }
+  return res.json();
 }
 
 export async function deletePolicy(policyId: string): Promise<any> {
   const res = await fetch(`${API_BASE}/cases/aux/policies/${policyId}`, { method: 'DELETE' });
-  return handleResponse<any>(res, 'Failed to delete policy');
+  if (!res.ok) throw new Error('Failed to delete policy');
+  return res.json();
 }
 
 export async function fetchAvailableHospitals(): Promise<any[]> {
   const res = await fetch(`${API_BASE}/cases/aux/hospitals`);
-  return handleResponse<any[]>(res, 'Failed to fetch hospitals');
+  if (!res.ok) throw new Error('Failed to fetch hospitals');
+  return res.json();
 }
 
 export async function evaluateCase(caseId: string): Promise<CaseDetail> {
   const res = await fetch(`${API_BASE}/cases/${caseId}/evaluate`, { method: 'POST' });
-  return handleResponse<CaseDetail>(res, 'Failed to evaluate case');
+  if (!res.ok) throw new Error('Failed to evaluate case');
+  return res.json();
 }
 
 export async function submitCasePreauth(caseId: string, scenario: string = 'SUCCESS'): Promise<any> {
   const res = await fetch(`${API_BASE}/cases/${caseId}/submit?scenario=${scenario}`, { method: 'POST' });
-  return handleResponse<any>(res, 'Failed to submit preauthorization');
+  if (!res.ok) throw new Error('Failed to submit preauthorization');
+  return res.json();
 }
 
 export async function resolveBlocker(caseId: string, blockerId: string): Promise<any> {
   const res = await fetch(`${API_BASE}/cases/${caseId}/resolve-blocker/${blockerId}`, { method: 'POST' });
-  return handleResponse<any>(res, 'Failed to resolve blocker');
+  if (!res.ok) throw new Error('Failed to resolve blocker');
+  return res.json();
 }
 
 export async function uploadDocument(caseId: string, docType: string, textContent?: string, file?: File): Promise<any> {
@@ -150,12 +149,14 @@ export async function uploadDocument(caseId: string, docType: string, textConten
     method: 'POST',
     body: formData
   });
-  return handleResponse<any>(res, 'Failed to upload document');
+  if (!res.ok) throw new Error('Failed to upload document');
+  return res.json();
 }
 
 export async function fetchClaims(): Promise<ClaimItem[]> {
   const res = await fetch(`${API_BASE}/claims`);
-  return handleResponse<ClaimItem[]>(res, 'Failed to fetch claims');
+  if (!res.ok) throw new Error('Failed to fetch claims');
+  return res.json();
 }
 
 export async function raiseClaimQuery(claimId: string, reason: string): Promise<any> {
@@ -164,7 +165,8 @@ export async function raiseClaimQuery(claimId: string, reason: string): Promise<
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ category: 'CLINICAL_JUSTIFICATION', reason })
   });
-  return handleResponse<any>(res, 'Failed to raise query');
+  if (!res.ok) throw new Error('Failed to raise query');
+  return res.json();
 }
 
 export async function approveClaim(claimId: string, approvedAmount?: number): Promise<any> {
@@ -173,7 +175,8 @@ export async function approveClaim(claimId: string, approvedAmount?: number): Pr
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ approved_amount: approvedAmount })
   });
-  return handleResponse<any>(res, 'Failed to approve claim');
+  if (!res.ok) throw new Error('Failed to approve claim');
+  return res.json();
 }
 
 export async function rejectClaim(claimId: string, reason: string): Promise<any> {
@@ -182,7 +185,8 @@ export async function rejectClaim(claimId: string, reason: string): Promise<any>
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ decision_reason: reason })
   });
-  return handleResponse<any>(res, 'Failed to reject claim');
+  if (!res.ok) throw new Error('Failed to reject claim');
+  return res.json();
 }
 
 export async function acknowledgeClaim(claimId: string, payload: any): Promise<any> {
@@ -191,12 +195,14 @@ export async function acknowledgeClaim(claimId: string, payload: any): Promise<a
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
   });
-  return handleResponse<any>(res, 'Failed to issue acknowledgement');
+  if (!res.ok) throw new Error('Failed to issue acknowledgement');
+  return res.json();
 }
 
 export async function fetchTraceOverview(): Promise<TraceOverview> {
   const res = await fetch(`${API_BASE}/trace/overview`);
-  return handleResponse<TraceOverview>(res, 'Failed to fetch trace overview');
+  if (!res.ok) throw new Error('Failed to fetch trace overview');
+  return res.json();
 }
 
 export async function previewCohort(filters: CohortFilter): Promise<CohortPreview> {
@@ -205,7 +211,8 @@ export async function previewCohort(filters: CohortFilter): Promise<CohortPrevie
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(filters)
   });
-  return handleResponse<CohortPreview>(res, 'Failed to preview cohort');
+  if (!res.ok) throw new Error('Failed to preview cohort');
+  return res.json();
 }
 
 export async function createExportJob(filters: CohortFilter): Promise<ExportJob> {
@@ -214,22 +221,26 @@ export async function createExportJob(filters: CohortFilter): Promise<ExportJob>
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ dataset_version: filters.dataset_version, filters })
   });
-  return handleResponse<ExportJob>(res, 'Failed to create export job');
+  if (!res.ok) throw new Error('Failed to create export job');
+  return res.json();
 }
 
 export async function fetchExports(): Promise<ExportJob[]> {
   const res = await fetch(`${API_BASE}/trace/exports`);
-  return handleResponse<ExportJob[]>(res, 'Failed to fetch exports');
+  if (!res.ok) throw new Error('Failed to fetch exports');
+  return res.json();
 }
 
 export async function fetchDatasets(): Promise<any[]> {
   const res = await fetch(`${API_BASE}/trace/datasets`);
-  return handleResponse<any[]>(res, 'Failed to fetch datasets');
+  if (!res.ok) throw new Error('Failed to fetch datasets');
+  return res.json();
 }
 
 export async function fetchMCPTools(): Promise<MCPTool[]> {
   const res = await fetch(`${API_BASE}/mcp/tools`);
-  return handleResponse<MCPTool[]>(res, 'Failed to fetch MCP tools');
+  if (!res.ok) throw new Error('Failed to fetch MCP tools');
+  return res.json();
 }
 
 export async function chatMCPAgent(
@@ -248,7 +259,8 @@ export async function chatMCPAgent(
       provider: provider
     })
   });
-  return handleResponse<any>(res, 'Healthcare Assistant error');
+  if (!res.ok) throw new Error('Healthcare Assistant error');
+  return res.json();
 }
 
 export async function sendSmsNotification(to: string, body: string): Promise<any> {
@@ -257,7 +269,11 @@ export async function sendSmsNotification(to: string, body: string): Promise<any
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ to, body })
   });
-  return handleResponse<any>(res, 'Failed to dispatch SMS');
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Failed to send SMS' }));
+    throw new Error(err.detail || 'Failed to dispatch SMS');
+  }
+  return res.json();
 }
 
 export async function triggerN8NWebhook(eventType: string = 'CASE_STATUS_CHANGED'): Promise<any> {
@@ -266,7 +282,8 @@ export async function triggerN8NWebhook(eventType: string = 'CASE_STATUS_CHANGED
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ event_type: eventType })
   });
-  return handleResponse<any>(res, 'Failed to trigger n8n');
+  if (!res.ok) throw new Error('Failed to trigger n8n');
+  return res.json();
 }
 
 export async function loginApi(payload: {
