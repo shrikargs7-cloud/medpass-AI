@@ -192,42 +192,48 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
         </div>
       )}
 
-      {/* KPI Summary Row */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
-          <div className="text-slate-500 text-xs font-medium">Active Cases</div>
-          <div className="text-2xl font-bold text-slate-900 mt-1">{activeCount}</div>
-          <div className="text-[10px] text-teal-600 font-semibold mt-1 flex items-center">
-            <Activity className="w-3 h-3 mr-1" /> Real-time pipeline
+      {/* 4 Pillars of MedPass AI Header Banner (Ref: DSU DEVHACK 3.0 PPT Slide 1) */}
+      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-teal-950 p-4 rounded-2xl text-white shadow-md border border-slate-700/60">
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-700/60">
+          <div>
+            <div className="flex items-center space-x-2">
+              <span className="text-[10px] font-bold uppercase tracking-wider bg-teal-500/20 text-teal-300 px-2 py-0.5 rounded border border-teal-500/40">
+                The Intelligence Layer for Healthcare Authorization
+              </span>
+              <span className="text-xs text-slate-400">• Team THE X (RV University)</span>
+            </div>
+            <h3 className="text-sm font-bold text-white mt-1">
+              "From fragmented records to a submission ready case in minutes, not hours."
+            </h3>
+          </div>
+          <div className="flex items-center space-x-3 text-xs">
+            <span className="bg-emerald-500/20 text-emerald-300 px-2.5 py-1 rounded-lg border border-emerald-500/40 font-semibold">
+              IRDAI Target: &lt;3h Discharge (vs 6-48h)
+            </span>
+            <span className="bg-blue-500/20 text-blue-300 px-2.5 py-1 rounded-lg border border-blue-500/40 font-semibold">
+              50% Fewer Insurer Queries
+            </span>
           </div>
         </div>
 
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
-          <div className="text-slate-500 text-xs font-medium">Submission Ready</div>
-          <div className="text-2xl font-bold text-emerald-600 mt-1">{readyCount}</div>
-          <div className="text-[10px] text-emerald-600 font-semibold mt-1">Readiness ≥ 85%</div>
-        </div>
-
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
-          <div className="text-slate-500 text-xs font-medium">Cases Blocked</div>
-          <div className="text-2xl font-bold text-rose-600 mt-1">{blockedCount}</div>
-          <div className="text-[10px] text-rose-600 font-semibold mt-1">Readiness &lt; 60%</div>
-        </div>
-
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
-          <div className="text-slate-500 text-xs font-medium">Insurer Queried</div>
-          <div className="text-2xl font-bold text-amber-600 mt-1">{queriedCount}</div>
-          <div className="text-[10px] text-amber-600 font-semibold mt-1">Action required</div>
-        </div>
-
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs flex flex-col justify-center">
-          <button
-            onClick={() => setShowIntakeModal(true)}
-            className="w-full flex items-center justify-center py-2.5 px-3 bg-teal-600 text-white rounded-lg text-xs font-semibold hover:bg-teal-700 transition-colors shadow-xs cursor-pointer"
-          >
-            <Plus className="w-4 h-4 mr-1" />
-            New Case Intake
-          </button>
+        {/* 4 Pillars Grid */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-3 text-xs">
+          <div className="bg-slate-800/80 p-2.5 rounded-xl border border-slate-700/50">
+            <span className="text-teal-400 font-bold block text-[11px]">1. Authorization Readiness</span>
+            <p className="text-[10px] text-slate-300 mt-0.5">Know if case is ready before submission via weighted scoring</p>
+          </div>
+          <div className="bg-slate-800/80 p-2.5 rounded-xl border border-slate-700/50">
+            <span className="text-teal-400 font-bold block text-[11px]">2. Coverage Clarity</span>
+            <p className="text-[10px] text-slate-300 mt-0.5">Know what insurance covers vs what the patient owes</p>
+          </div>
+          <div className="bg-slate-800/80 p-2.5 rounded-xl border border-slate-700/50">
+            <span className="text-teal-400 font-bold block text-[11px]">3. Discharge Intelligence</span>
+            <p className="text-[10px] text-slate-300 mt-0.5">Pinpoint exact blockers preventing patient from going home</p>
+          </div>
+          <div className="bg-slate-800/80 p-2.5 rounded-xl border border-slate-700/50">
+            <span className="text-teal-400 font-bold block text-[11px]">4. Outcome Learning</span>
+            <p className="text-[10px] text-slate-300 mt-0.5">Trace Commons longitudinal layer makes every case smarter</p>
+          </div>
         </div>
       </div>
 
@@ -306,24 +312,80 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
                   </p>
                 </div>
 
-                <div className="flex items-center space-x-2">
-                  <button
-                    onClick={handleEvaluate}
-                    disabled={evaluating}
-                    className="flex items-center px-3.5 py-2 bg-slate-900 text-white rounded-lg text-xs font-semibold hover:bg-slate-800 transition-colors shadow-xs cursor-pointer"
-                  >
-                    <Sparkles className="w-3.5 h-3.5 mr-1.5 text-teal-400" />
-                    {evaluating ? 'Evaluating...' : 'Run Policy Engine'}
-                  </button>
+                {/* Readiness Score Gauge Badge (Ref: PPT Slide 4) */}
+                <div className="flex items-center space-x-4">
+                  <div className="flex items-center space-x-3 bg-gradient-to-br from-teal-50 to-emerald-50 border-2 border-teal-500/40 p-2.5 rounded-2xl shadow-xs">
+                    <div className="relative flex items-center justify-center w-14 h-14 rounded-full border-4 border-teal-600 bg-white">
+                      <span className="text-sm font-black text-slate-900 font-mono">
+                        {Math.round(selectedCase.readiness_score)}
+                      </span>
+                      <span className="text-[9px] text-slate-400 absolute bottom-1">/100</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-bold tracking-wider text-teal-800 block">
+                        Authorization Readiness
+                      </span>
+                      <span className={`inline-flex items-center text-xs font-extrabold px-2 py-0.5 rounded-md mt-0.5 ${
+                        selectedCase.readiness_score >= 85
+                          ? 'bg-emerald-600 text-white'
+                          : selectedCase.readiness_score >= 60
+                          ? 'bg-amber-500 text-white'
+                          : 'bg-rose-600 text-white'
+                      }`}>
+                        {selectedCase.readiness_score >= 85 ? '✓ READY TO SUBMIT' : selectedCase.readiness_score >= 60 ? 'REVIEW REQUIRED' : 'BLOCKED'}
+                      </span>
+                    </div>
+                  </div>
 
-                  <button
-                    onClick={handleSubmitPreauth}
-                    disabled={submitting}
-                    className="flex items-center px-3.5 py-2 bg-teal-600 text-white rounded-lg text-xs font-semibold hover:bg-teal-700 transition-colors shadow-xs cursor-pointer"
-                  >
-                    <ArrowRight className="w-3.5 h-3.5 mr-1.5" />
-                    {submitting ? 'Sending to Beeceptor...' : 'Submit to Payer'}
-                  </button>
+                  <div className="flex flex-col space-y-2">
+                    <button
+                      onClick={handleEvaluate}
+                      disabled={evaluating}
+                      className="flex items-center justify-center px-3.5 py-1.5 bg-slate-900 text-white rounded-lg text-xs font-semibold hover:bg-slate-800 transition-colors shadow-xs cursor-pointer"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 mr-1.5 text-teal-400" />
+                      {evaluating ? 'Evaluating...' : 'Run Policy Engine'}
+                    </button>
+
+                    <button
+                      onClick={handleSubmitPreauth}
+                      disabled={submitting}
+                      className="flex items-center justify-center px-3.5 py-1.5 bg-teal-600 text-white rounded-lg text-xs font-semibold hover:bg-teal-700 transition-colors shadow-xs cursor-pointer"
+                    >
+                      <ArrowRight className="w-3.5 h-3.5 mr-1.5" />
+                      {submitting ? 'Sending...' : 'Submit to Payer'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* 8-Step Implementation Methodology Stepper (Ref: PPT Slide 2) */}
+              <div className="mt-4 pt-3 border-t border-slate-100">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-2">
+                  MedPass 8-Step Hospital-to-Payer Pipeline
+                </span>
+                <div className="grid grid-cols-4 md:grid-cols-8 gap-1.5 text-[10px]">
+                  {[
+                    { step: 1, label: '1. Ingestion', active: true },
+                    { step: 2, label: '2. OCR Extract', active: true },
+                    { step: 3, label: '3. NLP Struct', active: true },
+                    { step: 4, label: '4. Policy Rule', active: (selectedCase.decisions?.length || 0) > 0 },
+                    { step: 5, label: '5. Gap Detect', active: (selectedCase.blockers?.length || 0) > 0 },
+                    { step: 6, label: '6. Readiness', active: selectedCase.readiness_score > 0 },
+                    { step: 7, label: '7. Review', active: selectedCase.readiness_score >= 80 },
+                    { step: 8, label: '8. Submission', active: selectedCase.case_status === 'APPROVED' || selectedCase.case_status === 'SUBMITTED' }
+                  ].map((s) => (
+                    <div
+                      key={s.step}
+                      className={`p-1.5 rounded-lg border text-center font-medium ${
+                        s.active
+                          ? 'bg-teal-50 border-teal-300 text-teal-900 font-bold'
+                          : 'bg-slate-50 border-slate-200 text-slate-400'
+                      }`}
+                    >
+                      {s.label}
+                    </div>
+                  ))}
                 </div>
               </div>
 
