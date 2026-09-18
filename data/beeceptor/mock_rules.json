@@ -1,0 +1,58 @@
+{
+  "mock_name": "MedPass AI — Insurer & NHCX Mock Endpoints",
+  "base_url": "https://medpass-mocks.free.beeceptor.com",
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/api/v1/preauth/submit",
+      "rules": [
+        {
+          "condition": "header: X-Mock-Scenario == SUCCESS",
+          "status": 202,
+          "response": {
+            "status": "APPROVED",
+            "external_reference": "BEE-PREAUTH-APPROVED-2026",
+            "authorized_amount": 50000.0,
+            "comments": "Preauthorization approved by payer clearinghouse."
+          }
+        },
+        {
+          "condition": "header: X-Mock-Scenario == QUERY",
+          "status": 200,
+          "response": {
+            "status": "QUERY_RAISED",
+            "external_reference": "BEE-QUERY-2026",
+            "query_category": "CLINICAL_JUSTIFICATION",
+            "query_text": "Please provide pre-operative ultrasound scan or clinical OT notes for line item validation."
+          }
+        },
+        {
+          "condition": "header: X-Mock-Scenario == REJECTION",
+          "status": 200,
+          "response": {
+            "status": "REJECTED",
+            "external_reference": "BEE-REJ-2026",
+            "rejection_code": "EXCLUSION_PED_ACTIVE",
+            "rejection_reason": "Pre-existing disease 2-year waiting period has not completed."
+          }
+        },
+        {
+          "condition": "header: X-Mock-Scenario == 500",
+          "status": 500,
+          "response": {
+            "error": "Internal 500 Adjudication Gateway Error"
+          }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/nhcx/claims",
+      "status": 200,
+      "response": {
+        "nhcx_bundle_id": "NHCX-ACK-2026",
+        "status": "ACCEPTED"
+      }
+    }
+  ]
+}

@@ -1,0 +1,88 @@
+{
+  "name": "MedPass AI — Case Lifecycle & Operational Notification",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "case-status",
+        "options": {}
+      },
+      "id": "node-webhook",
+      "name": "MedPass Webhook Ingest",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.body.event_type }}",
+              "operation": "equals",
+              "value2": "CLAIM_QUERIED"
+            }
+          ]
+        }
+      },
+      "id": "node-filter",
+      "name": "Is Query Raised?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "title": "=Urgent Insurer Query on Case {{ $json.body.data.case_number }}",
+        "description": "=Insurer raised a query: {{ $json.body.data.reason }}. Please upload missing clinical records immediately."
+      },
+      "id": "node-task",
+      "name": "Create Operational Task",
+      "type": "n8n-nodes-base.manualExecution",
+      "typeVersion": 1,
+      "position": [700, 200]
+    },
+    {
+      "parameters": {
+        "message": "=MedPass Notification: Case {{ $json.body.data.case_number }} transitioned to {{ $json.body.event_type }}."
+      },
+      "id": "node-notify",
+      "name": "Log Operational Audit",
+      "type": "n8n-nodes-base.manualExecution",
+      "typeVersion": 1,
+      "position": [700, 400]
+    }
+  ],
+  "connections": {
+    "MedPass Webhook Ingest": {
+      "main": [
+        [
+          {
+            "node": "Is Query Raised?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Query Raised?": {
+      "main": [
+        [
+          {
+            "node": "Create Operational Task",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Operational Audit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
