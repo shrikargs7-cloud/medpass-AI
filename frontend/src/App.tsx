@@ -7,7 +7,7 @@ import { HospitalDashboard } from './dashboards/HospitalDashboard';
 import { InsurerDashboard } from './dashboards/InsurerDashboard';
 import { PatientDashboard } from './dashboards/PatientDashboard';
 import { TraceCommonsDashboard } from './dashboards/TraceCommonsDashboard';
-import { PitchBlueprintModal } from './components/PitchBlueprintModal';
+import { WorkflowInfographicsModal } from './components/WorkflowInfographicsModal';
 
 interface UserSession {
   role: 'hospital' | 'patient' | 'insurer' | 'trace';
@@ -21,7 +21,7 @@ export function App() {
   const [selectedScenario, setSelectedScenario] = useState<string>('SUCCESS');
   const [selectedCaseId, setSelectedCaseId] = useState<string | undefined>(undefined);
   const [isMCPOpen, setIsMCPOpen] = useState<boolean>(false);
-  const [isPitchOpen, setIsPitchOpen] = useState<boolean>(false);
+  const [isInfographicsOpen, setIsInfographicsOpen] = useState<boolean>(false);
 
   // If no user is logged in, show the initial enterprise Login Gateway
   if (!userSession) {
@@ -55,7 +55,7 @@ export function App() {
         activePortal={activePortal}
         setActivePortal={setActivePortal}
         onOpenMCP={() => setIsMCPOpen(true)}
-        onOpenPitch={() => setIsPitchOpen(true)}
+        onOpenInfographics={() => setIsInfographicsOpen(true)}
         userSession={userSession}
         onLogout={() => setUserSession(null)}
       />
@@ -101,10 +101,10 @@ export function App() {
         currentCaseId={selectedCaseId}
       />
 
-      {/* Pitch & Architecture Blueprint Modal */}
-      <PitchBlueprintModal
-        isOpen={isPitchOpen}
-        onClose={() => setIsPitchOpen(false)}
+      {/* Interactive Workflow & n8n Infographics Modal */}
+      <WorkflowInfographicsModal
+        isOpen={isInfographicsOpen}
+        onClose={() => setIsInfographicsOpen(false)}
       />
 
       {/* Professional Enterprise Footer */}

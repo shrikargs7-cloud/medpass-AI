@@ -1,14 +1,14 @@
 import React from 'react';
 import {
   Activity, Shield, User, Database, Bot,
-  Layers, LogOut, CheckCircle2, Lock
+  Layers, LogOut, CheckCircle2, Lock, Workflow
 } from 'lucide-react';
 
 interface HeaderProps {
   activePortal: 'hospital' | 'insurer' | 'patient' | 'trace';
   setActivePortal: (portal: 'hospital' | 'insurer' | 'patient' | 'trace') => void;
   onOpenMCP: () => void;
-  onOpenPitch: () => void;
+  onOpenInfographics: () => void;
   userSession?: { role: string; name: string; subtitle?: string } | null;
   onLogout?: () => void;
 }
@@ -17,7 +17,7 @@ export const Header: React.FC<HeaderProps> = ({
   activePortal,
   setActivePortal,
   onOpenMCP,
-  onOpenPitch,
+  onOpenInfographics,
   userSession,
   onLogout
 }) => {
@@ -128,11 +128,11 @@ export const Header: React.FC<HeaderProps> = ({
             )}
 
             <button
-              onClick={onOpenPitch}
+              onClick={onOpenInfographics}
               className="flex items-center px-3 py-2 rounded-xl text-xs font-semibold bg-slate-100 text-slate-800 hover:bg-slate-200 transition-all border border-slate-200 cursor-pointer"
             >
-              <Layers className="w-3.5 h-3.5 mr-1.5 text-teal-600" />
-              Architecture
+              <Workflow className="w-3.5 h-3.5 mr-1.5 text-teal-600" />
+              Workflow & n8n
             </button>
 
             <button
