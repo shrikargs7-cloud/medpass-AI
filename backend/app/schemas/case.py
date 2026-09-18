@@ -122,6 +122,18 @@ class PolicyBriefResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class PolicyCreatePayload(BaseModel):
+    policy_ref: str
+    plan_name: str
+    plan_type: str = "COMPREHENSIVE"
+    network_type: str = "IN_NETWORK"
+    sum_insured: float = 500000.0
+    deductible: float = 10000.0
+    co_pay_pct: float = 10.0
+    room_rent_cap: float = 5000.0
+    icu_rent_cap: float = 10000.0
+    insurer_id: Optional[str] = None
+
 class BlockerCreate(BaseModel):
     blocker_type: str
     severity: str = "HIGH"
@@ -146,6 +158,8 @@ class CaseDetailResponse(BaseModel):
     discharge_status: str
     readiness_score: float
     readiness_band: str
+    policy_id: Optional[str] = None
+    policy: Optional[PolicyBriefResponse] = None
     primary_diagnosis_code: Optional[str] = None
     primary_diagnosis_name: Optional[str] = None
     admission_at: datetime
@@ -166,6 +180,7 @@ class ClaimResponseSchema(BaseModel):
     id: str
     case_id: str
     external_reference: Optional[str] = None
+    ack_token: Optional[str] = None
     status: str
     total_claimed: float
     covered_amount: float

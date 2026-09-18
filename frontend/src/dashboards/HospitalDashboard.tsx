@@ -2,14 +2,15 @@ import React, { useState, useEffect } from 'react';
 import {
   Activity, AlertTriangle, CheckCircle2, Clock, UploadCloud,
   FileText, ArrowRight, DollarSign, ShieldAlert, Sparkles, Plus,
-  Info, ChevronRight, FileCheck, Trash2, Edit3, X, Shield, RefreshCw, BarChart2
+  Info, ChevronRight, FileCheck, Trash2, Edit3, X, Shield, RefreshCw, BarChart2,
+  Award, Landmark, Search
 } from 'lucide-react';
-import { CaseDetail } from '../types';
+import { CaseDetail, ClaimItem } from '../types';
 import {
   fetchCases, fetchCaseDetail, evaluateCase,
   submitCasePreauth, resolveBlocker, uploadDocument, createCase,
   updateCase, deleteCase, addLineItem, updateLineItem, deleteLineItem,
-  addBlocker, deleteBlocker, fetchAvailablePolicies
+  addBlocker, deleteBlocker, fetchAvailablePolicies, fetchClaims
 } from '../api/client';
 import {
   ReadinessRing,
@@ -31,6 +32,7 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
 }) => {
   const [cases, setCases] = useState<CaseDetail[]>([]);
   const [selectedCase, setSelectedCase] = useState<CaseDetail | null>(null);
+  const [claims, setClaims] = useState<ClaimItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [evaluating, setEvaluating] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -96,17 +98,17 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
   const loadData = async (targetCaseId?: string) => {
     try {
       setLoading(true);
-      const data = await fetchCases();
+      const [data, policies, claimsData] = await Promise.all([
+        fetchCases(),
+        fetchAvailablePolicies().catch(() => []),
+        fetchClaims().catch(() => [])
+      ]);
       setCases(data);
+      setAvailablePolicies(policies);
+      setClaims(claimsData);
 
-      try {
-        const policies = await fetchAvailablePolicies();
-        setAvailablePolicies(policies);
-        if (policies.length > 0 && !newCaseForm.policy_id) {
-          setNewCaseForm((prev) => ({ ...prev, policy_id: policies[0].id }));
-        }
-      } catch (e) {
-        console.error('Error fetching policies:', e);
+      if (policies.length > 0 && !newCaseForm.policy_id) {
+        setNewCaseForm((prev) => ({ ...prev, policy_id: policies[0].id }));
       }
 
       if (data.length > 0) {
@@ -609,6 +611,106 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
               </div>
             </div>
 
+            {/* Mapped Policy Master & Verification Evidence */}
+            {(() => {
+              const matchingClaim = claims.find((c) => c.case_id === selectedCase.id);
+              const activePolicy = (selectedCase as any).policy || availablePolicies.find((p) => p.id === (selectedCase as any).policy_id || p.policy_ref === (selectedCase as any).policy_id) || availablePolicies[0];
+
+              if (!activePolicy) return null;
+
+              return (
+                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-3.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <Landmark className="w-4 h-4 text-indigo-600" />
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                        Mapped Policy Master & Verification Evidence
+                      </h3>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <span className="text-[10px] font-mono bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded font-bold">
+                        Policy ID: {activePolicy.policy_ref}
+                      </span>
+                      <span className="text-xs font-semibold text-slate-600">
+                        {activePolicy.insurer_id || 'Insurer Master'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Official NHCX Payer Acknowledgement Status */}
+                  {matchingClaim?.ack_token ? (
+                    <div className="p-3 bg-teal-50 border border-teal-200 rounded-xl flex items-center justify-between">
+                      <div className="flex items-center space-x-2.5">
+                        <Award className="w-5 h-5 text-teal-600 shrink-0" />
+                        <div>
+                          <div className="text-xs font-bold text-teal-900 flex items-center space-x-1.5">
+                            <span>IRDAI NHCX Official Payer Acknowledgement Confirmed</span>
+                            <span className="px-1.5 py-0.2 rounded bg-teal-200/80 text-teal-900 text-[10px] font-bold">
+                              {matchingClaim.status}
+                            </span>
+                          </div>
+                          <div className="text-[11px] font-mono text-teal-700 mt-0.5">
+                            Token: <strong>{matchingClaim.ack_token}</strong> • External Ref: {matchingClaim.external_reference || selectedCase.case_number}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[10px] text-teal-600 font-bold uppercase block">Cashless Cleared</span>
+                        <span className="text-sm font-black text-teal-900 font-mono">
+                          ₹{matchingClaim.covered_amount?.toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                  ) : matchingClaim?.status === 'QUERY_RAISED' ? (
+                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between text-xs text-amber-900">
+                      <div className="flex items-center space-x-2">
+                        <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                        <div>
+                          <span className="font-bold">Insurer Query Raised:</span> Clinical documents or OT justification requested by payer before issuing cashless acknowledgement.
+                        </div>
+                      </div>
+                      <span className="px-2 py-0.5 rounded bg-amber-200 font-bold text-[10px]">
+                        PENDING INFO
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between text-xs text-slate-600">
+                      <span className="text-[11px]">
+                        Payer Pre-Authorization: {selectedCase.authorization_status === 'APPROVED' ? 'Approved' : 'Pending Submission/Adjudication'}.
+                      </span>
+                      <button
+                        onClick={handleSubmitPreauth}
+                        disabled={submitting}
+                        className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[11px] font-bold cursor-pointer transition-colors"
+                      >
+                        {submitting ? 'Submitting...' : 'Transmit to Insurer'}
+                      </button>
+                    </div>
+                  )}
+
+                  {/* 4-Parameter Grid Mapped from Policy Master */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
+                    <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100">
+                      <span className="text-[10px] text-slate-400 font-medium uppercase block">Sum Insured</span>
+                      <div className="font-bold text-slate-800 text-sm mt-0.5">₹{activePolicy.sum_insured?.toLocaleString()}</div>
+                    </div>
+                    <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100">
+                      <span className="text-[10px] text-slate-400 font-medium uppercase block">Room Rent Cap / Day</span>
+                      <div className="font-bold text-slate-800 text-sm mt-0.5">₹{activePolicy.room_rent_cap?.toLocaleString()}</div>
+                    </div>
+                    <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100">
+                      <span className="text-[10px] text-slate-400 font-medium uppercase block">ICU Rent Cap / Day</span>
+                      <div className="font-bold text-slate-800 text-sm mt-0.5">₹{(activePolicy.icu_rent_cap || 0).toLocaleString()}</div>
+                    </div>
+                    <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100">
+                      <span className="text-[10px] text-slate-400 font-medium uppercase block">Co-Pay & Deductible</span>
+                      <div className="font-bold text-slate-800 text-sm mt-0.5">{activePolicy.co_pay_pct}% co-pay • ₹{activePolicy.deductible || 0}</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* Visual Graph: Financial Waterfall Analysis */}
             <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs">
               <div className="flex items-center justify-between mb-3">
@@ -841,20 +943,114 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
                 </div>
               </div>
 
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Insurance Policy</label>
-                <select
-                  value={newCaseForm.policy_id}
-                  onChange={(e) => setNewCaseForm({ ...newCaseForm, policy_id: e.target.value })}
-                  className="w-full p-2 rounded-xl border border-slate-200 font-mono"
-                >
-                  {availablePolicies.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.plan_name} • ₹{p.sum_insured.toLocaleString()} • Cap: ₹{p.room_rent_cap}/d
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {/* Policy ID Selector & Live Mapped Parameters */}
+              {(() => {
+                const selectedNewPolicy = availablePolicies.find((p) => p.id === newCaseForm.policy_id || p.policy_ref === newCaseForm.policy_id) || availablePolicies[0];
+                const previewRoomDaily = Number(newCaseForm.room_rent_rate) || 0;
+                const previewDays = Number(newCaseForm.room_days) || 0;
+                const previewSurgery = Number(newCaseForm.surgery_cost) || 0;
+                const previewGross = (previewRoomDaily * previewDays) + previewSurgery;
+                const previewCap = selectedNewPolicy ? selectedNewPolicy.room_rent_cap : 5000;
+                const isRoomOverCap = previewRoomDaily > previewCap;
+                const previewRoomExcessDaily = Math.max(0, previewRoomDaily - previewCap);
+                const previewTotalExcess = previewRoomExcessDaily * previewDays;
+                const previewAdmissibleRoom = Math.min(previewRoomDaily, previewCap) * previewDays;
+                const previewAdmissibleBase = previewAdmissibleRoom + previewSurgery;
+                const previewCopayPct = selectedNewPolicy ? selectedNewPolicy.co_pay_pct : 10;
+                const previewCopayAmount = previewAdmissibleBase * (previewCopayPct / 100);
+                const previewInsurerPayout = Math.max(0, previewAdmissibleBase - previewCopayAmount);
+                const previewPatientShare = previewTotalExcess + previewCopayAmount;
+
+                return (
+                  <div className="space-y-2.5">
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="font-semibold text-slate-700">Insurance Policy ID & Plan</label>
+                        <span className="text-[10px] text-indigo-700 font-bold bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
+                          Auto-Mapped to Master
+                        </span>
+                      </div>
+                      <select
+                        value={newCaseForm.policy_id}
+                        onChange={(e) => setNewCaseForm({ ...newCaseForm, policy_id: e.target.value })}
+                        className="w-full p-2 rounded-xl border border-slate-200 font-mono text-xs bg-slate-50"
+                      >
+                        {availablePolicies.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            [{p.policy_ref}] {p.plan_name} • Cap: ₹{p.room_rent_cap?.toLocaleString()}/d • {p.insurer_id || 'Payer'}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Mapped Policy Parameters Display */}
+                    {selectedNewPolicy && (
+                      <div className="p-3 bg-indigo-50/60 rounded-xl border border-indigo-200 space-y-2">
+                        <div className="flex items-center justify-between text-[11px]">
+                          <div className="flex items-center space-x-1.5">
+                            <Landmark className="w-3.5 h-3.5 text-indigo-700" />
+                            <span className="font-bold text-indigo-900">{selectedNewPolicy.plan_name}</span>
+                          </div>
+                          <span className="font-mono font-bold text-indigo-800 bg-white px-1.5 py-0.5 rounded border border-indigo-200 text-[10px]">
+                            {selectedNewPolicy.policy_ref}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-4 gap-1.5 text-center text-[10px] bg-white p-2 rounded-lg border border-indigo-100">
+                          <div>
+                            <span className="text-slate-400 block">Sum Insured</span>
+                            <strong className="text-slate-800">₹{selectedNewPolicy.sum_insured?.toLocaleString()}</strong>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 block">Room Cap/Day</span>
+                            <strong className="text-slate-800">₹{selectedNewPolicy.room_rent_cap?.toLocaleString()}</strong>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 block">ICU Cap/Day</span>
+                            <strong className="text-slate-800">₹{(selectedNewPolicy.icu_rent_cap || 0).toLocaleString()}</strong>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 block">Co-Pay</span>
+                            <strong className="text-slate-800">{selectedNewPolicy.co_pay_pct}%</strong>
+                          </div>
+                        </div>
+
+                        {/* Dynamic Rule Enforcement Check */}
+                        {isRoomOverCap ? (
+                          <div className="p-2 rounded-lg bg-amber-100/90 border border-amber-300 text-[10px] text-amber-950 flex items-start space-x-1.5">
+                            <AlertTriangle className="w-3.5 h-3.5 text-amber-700 shrink-0 mt-0.5" />
+                            <div>
+                              <span className="font-bold">Room Rent Cap Breach:</span> Daily rate of ₹{previewRoomDaily.toLocaleString()} exceeds cap ₹{previewCap.toLocaleString()}/d by ₹{previewRoomExcessDaily.toLocaleString()}/d.
+                              For {previewDays} days, <strong className="text-rose-700 font-bold">₹{previewTotalExcess.toLocaleString()}</strong> will fall to patient out-of-pocket obligation.
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="p-2 rounded-lg bg-emerald-100/80 border border-emerald-300 text-[10px] text-emerald-950 flex items-center space-x-1.5">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                            <span>Room tariff conforms to policy cap (₹{previewCap.toLocaleString()}/day). Admissible for cashless preauth.</span>
+                          </div>
+                        )}
+
+                        {/* Calculated Waterfall Preview */}
+                        <div className="pt-2 border-t border-indigo-100 grid grid-cols-3 gap-2 text-center text-[10px]">
+                          <div>
+                            <span className="text-slate-500 block">Gross Estimate</span>
+                            <strong className="text-slate-900 text-[11px]">₹{previewGross.toLocaleString()}</strong>
+                          </div>
+                          <div>
+                            <span className="text-emerald-700 block">Est. Payer Payout</span>
+                            <strong className="text-emerald-700 text-[11px]">₹{previewInsurerPayout.toLocaleString()}</strong>
+                          </div>
+                          <div>
+                            <span className="text-amber-700 block">Est. Patient Share</span>
+                            <strong className="text-amber-700 text-[11px]">₹{previewPatientShare.toLocaleString()}</strong>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               <div className="grid grid-cols-3 gap-2 p-2.5 bg-slate-50 rounded-xl border border-slate-200">
                 <div>
@@ -863,7 +1059,7 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
                     type="number"
                     value={newCaseForm.room_rent_rate}
                     onChange={(e) => setNewCaseForm({ ...newCaseForm, room_rent_rate: Number(e.target.value) })}
-                    className="w-full p-1.5 rounded-lg border border-slate-200 bg-white"
+                    className="w-full p-1.5 rounded-lg border border-slate-200 bg-white font-semibold"
                   />
                 </div>
                 <div>
@@ -872,7 +1068,7 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
                     type="number"
                     value={newCaseForm.room_days}
                     onChange={(e) => setNewCaseForm({ ...newCaseForm, room_days: Number(e.target.value) })}
-                    className="w-full p-1.5 rounded-lg border border-slate-200 bg-white"
+                    className="w-full p-1.5 rounded-lg border border-slate-200 bg-white font-semibold"
                   />
                 </div>
                 <div>
@@ -881,7 +1077,7 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
                     type="number"
                     value={newCaseForm.surgery_cost}
                     onChange={(e) => setNewCaseForm({ ...newCaseForm, surgery_cost: Number(e.target.value) })}
-                    className="w-full p-1.5 rounded-lg border border-slate-200 bg-white"
+                    className="w-full p-1.5 rounded-lg border border-slate-200 bg-white font-semibold"
                   />
                 </div>
               </div>

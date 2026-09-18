@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime
 from typing import Optional, List
 from pydantic import BaseModel
@@ -18,6 +19,12 @@ class ClaimQueryCreate(BaseModel):
 class ClaimDecisionAction(BaseModel):
     decision_reason: Optional[str] = None
     approved_amount: Optional[float] = None
+
+class ClaimAcknowledgeAction(BaseModel):
+    acknowledgement_number: Optional[str] = None
+    status: str = "APPROVED"
+    approved_amount: Optional[float] = None
+    notes: Optional[str] = None
 
 @router.get("")
 def list_claims(status: Optional[str] = None, db: Session = Depends(get_db)):
@@ -134,3 +141,56 @@ def reject_claim(claim_id: str, payload: ClaimDecisionAction, db: Session = Depe
         N8NWebhookDispatcher.dispatch_case_event("CLAIM_REJECTED", {"claim_id": claim.id, "case_number": case.case_number, "reason": payload.decision_reason})
 
     return {"message": "Claim rejected by payer", "status": "REJECTED"}
+
+@router.post("/{claim_id}/acknowledge")
+def acknowledge_claim(claim_id: str, payload: ClaimAcknowledgeAction, db: Session = Depends(get_db)):
+    claim = db.query(Claim).filter(Claim.id == claim_id).first()
+    if not claim:
+        raise HTTPException(status_code=404, detail="Claim not found")
+
+    ack_token = payload.acknowledgement_number or f"ACK-NHCX-{datetime.utcnow().strftime('%Y%m%d')}-{str(uuid.uuid4())[:6].upper()}"
+    claim.external_reference = ack_token
+    claim.status = payload.status
+    claim.decided_at = datetime.utcnow()
+    if payload.approved_amount is not None:
+        claim.covered_amount = payload.approved_amount
+
+    case = claim.case
+    if case:
+        case.authorization_status = payload.status
+        if payload.status == "APPROVED":
+            case.case_status = "APPROVED"
+            for b in (case.blockers or []):
+                if b.blocker_type in ["INSURANCE_AUTHORIZATION", "INSURER_QUERY"]:
+                    b.is_resolved = True
+                    b.resolved_at = datetime.utcnow()
+        elif payload.status == "QUERY_RAISED":
+            case.case_status = "QUERIED"
+            blocker = DischargeBlocker(
+                case_id=case.id,
+                blocker_type="INSURER_QUERY",
+                severity="CRITICAL",
+                owner_role="HOSPITAL_STAFF",
+                description=payload.notes or "Payer requested additional documentation.",
+                action_required="Hospital staff must upload required medical evidence."
+            )
+            db.add(blocker)
+
+    db.commit()
+    if case:
+        TraceEventService.record_event(db, f"CLAIM_ACK_{payload.status}", case, actor_role="INSURER_REVIEWER", extra_data={"ack": ack_token, "notes": payload.notes})
+        N8NWebhookDispatcher.dispatch_case_event(f"CLAIM_ACK_{payload.status}", {
+            "claim_id": claim.id,
+            "case_number": case.case_number,
+            "ack_number": ack_token,
+            "status": payload.status,
+            "covered_amount": claim.covered_amount
+        })
+
+    return {
+        "message": "Payer acknowledgement issued successfully",
+        "acknowledgement_number": ack_token,
+        "status": claim.status,
+        "covered_amount": claim.covered_amount
+    }
+

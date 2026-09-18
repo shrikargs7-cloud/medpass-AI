@@ -78,6 +78,20 @@ export interface CaseDetail {
   total_gross: number;
   total_covered: number;
   total_patient_payable: number;
+  policy_id?: string;
+  policy?: {
+    id: string;
+    policy_ref: string;
+    plan_name: string;
+    plan_type: string;
+    network_type: string;
+    sum_insured: number;
+    deductible: number;
+    co_pay_pct: number;
+    room_rent_cap: number;
+    icu_rent_cap: number;
+    insurer_id?: string;
+  };
   created_at: string;
 }
 
@@ -88,9 +102,11 @@ export interface ClaimItem {
   hospital_name: string;
   patient_name: string;
   external_reference?: string;
+  ack_token?: string;
   status: string;
   total_claimed: number;
   covered_amount: number;
+  patient_payable?: number;
   submitted_at: string;
   queries_count: number;
 }

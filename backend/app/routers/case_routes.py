@@ -7,12 +7,12 @@ from sqlalchemy.orm import Session
 from backend.app.db import get_db
 from backend.app.models.operational import (
     Case, Patient, Hospital, Policy, TreatmentLineItem, CoverageDecision,
-    CalculationItem, DischargeBlocker, Claim
+    CalculationItem, DischargeBlocker, Claim, Insurer, PolicyRule
 )
 from backend.app.schemas.case import (
     CaseCreate, CaseUpdate, CaseDetailResponse, ReadinessScoreBreakdown,
     CoverageDecisionResponse, DischargeBlockerResponse, ClaimResponseSchema,
-    LineItemCreate, BlockerCreate, PolicyBriefResponse
+    LineItemCreate, BlockerCreate, PolicyBriefResponse, PolicyCreatePayload
 )
 from backend.app.services.policy_engine import DeterministicPolicyEngine
 from backend.app.services.calculation_engine import FinancialCalculationEngine
@@ -540,8 +540,76 @@ def get_available_policies(db: Session = Depends(get_db)):
     policies = db.query(Policy).all()
     return policies
 
+@router.post("/aux/policies", response_model=PolicyBriefResponse)
+def create_new_policy(payload: PolicyCreatePayload, db: Session = Depends(get_db)):
+    # Check if policy_ref already exists
+    existing = db.query(Policy).filter(Policy.policy_ref == payload.policy_ref).first()
+    if existing:
+        raise HTTPException(status_code=400, detail=f"Policy with ID '{payload.policy_ref}' already exists")
+
+    insurer = None
+    if payload.insurer_id:
+        insurer = db.query(Insurer).filter(Insurer.id == payload.insurer_id).first()
+    if not insurer:
+        insurer = db.query(Insurer).first()
+        if not insurer:
+            insurer = Insurer(insurer_ref="STAR-HEALTH", name="Star Health & Allied Insurance")
+            db.add(insurer)
+            db.flush()
+
+    new_policy = Policy(
+        insurer_id=insurer.id,
+        policy_ref=payload.policy_ref.strip().upper(),
+        plan_name=payload.plan_name.strip(),
+        plan_type=payload.plan_type,
+        network_type=payload.network_type,
+        sum_insured=payload.sum_insured,
+        deductible=payload.deductible,
+        co_pay_pct=payload.co_pay_pct,
+        room_rent_cap=payload.room_rent_cap,
+        icu_rent_cap=payload.icu_rent_cap,
+        effective_from=datetime.utcnow().date(),
+        effective_to=datetime.utcnow().date().replace(year=datetime.utcnow().year + 1)
+    )
+    db.add(new_policy)
+    db.flush()
+
+    # Automatically attach deterministic calculation rules
+    r_room = PolicyRule(
+        policy_id=new_policy.id,
+        rule_code=f"RULE-ROOM-{new_policy.policy_ref}",
+        rule_type="ROOM_LIMIT",
+        priority=40,
+        conditions={"category": "ROOM_RENT"},
+        action={"type": "CAP_PER_DAY", "limit": payload.room_rent_cap},
+        source_clause_ref="Clause 4.1 Daily Room Rent Cap"
+    )
+    r_copay = PolicyRule(
+        policy_id=new_policy.id,
+        rule_code=f"RULE-COPAY-{new_policy.policy_ref}",
+        rule_type="COPAY",
+        priority=60,
+        conditions={},
+        action={"type": "PERCENTAGE", "percentage": payload.co_pay_pct},
+        source_clause_ref="Clause 6.2 Co-payment Share"
+    )
+    db.add_all([r_room, r_copay])
+    db.commit()
+    db.refresh(new_policy)
+    return new_policy
+
+@router.delete("/aux/policies/{policy_id}")
+def delete_policy(policy_id: str, db: Session = Depends(get_db)):
+    policy = db.query(Policy).filter((Policy.id == policy_id) | (Policy.policy_ref == policy_id)).first()
+    if not policy:
+        raise HTTPException(status_code=404, detail="Policy not found")
+    db.delete(policy)
+    db.commit()
+    return {"message": "Policy deleted successfully", "policy_id": policy_id}
+
 @router.get("/aux/hospitals")
 def get_available_hospitals(db: Session = Depends(get_db)):
     hospitals = db.query(Hospital).all()
     return [{"id": h.id, "name": h.name, "hospital_tier": h.hospital_tier} for h in hospitals]
+
 

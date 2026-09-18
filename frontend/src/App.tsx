@@ -44,6 +44,14 @@ export function App() {
           setSelectedCaseId(caseId);
           setActivePortal('patient');
         }}
+        onLoginInsurer={(insurer) => {
+          setUserSession({
+            role: 'insurer',
+            name: insurer.name,
+            subtitle: `${insurer.role} • ${insurer.company}`
+          });
+          setActivePortal('insurer');
+        }}
       />
     );
   }

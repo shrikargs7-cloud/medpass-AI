@@ -94,6 +94,25 @@ export async function fetchAvailablePolicies(): Promise<any[]> {
   return res.json();
 }
 
+export async function createPolicy(payload: any): Promise<any> {
+  const res = await fetch(`${API_BASE}/cases/aux/policies`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Failed to create policy');
+  }
+  return res.json();
+}
+
+export async function deletePolicy(policyId: string): Promise<any> {
+  const res = await fetch(`${API_BASE}/cases/aux/policies/${policyId}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error('Failed to delete policy');
+  return res.json();
+}
+
 export async function fetchAvailableHospitals(): Promise<any[]> {
   const res = await fetch(`${API_BASE}/cases/aux/hospitals`);
   if (!res.ok) throw new Error('Failed to fetch hospitals');
@@ -164,6 +183,16 @@ export async function rejectClaim(claimId: string, reason: string): Promise<any>
     body: JSON.stringify({ decision_reason: reason })
   });
   if (!res.ok) throw new Error('Failed to reject claim');
+  return res.json();
+}
+
+export async function acknowledgeClaim(claimId: string, payload: any): Promise<any> {
+  const res = await fetch(`${API_BASE}/claims/${claimId}/acknowledge`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok) throw new Error('Failed to issue acknowledgement');
   return res.json();
 }
 

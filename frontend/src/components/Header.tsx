@@ -66,53 +66,65 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Role / Portal Navigation */}
           <nav className="flex items-center space-x-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
-            <button
-              onClick={() => setActivePortal('hospital')}
-              className={`flex items-center px-3 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                activePortal === 'hospital'
-                  ? 'bg-white text-teal-900 shadow-xs border border-slate-200/80'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-              }`}
-            >
-              <Activity className="w-4 h-4 mr-1.5 text-teal-600" />
-              Hospital Portal
-            </button>
+            {/* Hospital can see Hospital Portal */}
+            {(!userSession || userSession.role === 'hospital') && (
+              <button
+                onClick={() => setActivePortal('hospital')}
+                className={`flex items-center px-3 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  activePortal === 'hospital'
+                    ? 'bg-white text-teal-900 shadow-xs border border-slate-200/80'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                }`}
+              >
+                <Activity className="w-4 h-4 mr-1.5 text-teal-600" />
+                Hospital Portal
+              </button>
+            )}
 
-            <button
-              onClick={() => setActivePortal('insurer')}
-              className={`flex items-center px-3 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                activePortal === 'insurer'
-                  ? 'bg-white text-indigo-900 shadow-xs border border-slate-200/80'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-              }`}
-            >
-              <Shield className="w-4 h-4 mr-1.5 text-indigo-600" />
-              Insurer / TPA
-            </button>
+            {/* Insurer can ONLY see Insurer / TPA. Hospital can NEVER see TPA */}
+            {(!userSession || userSession.role === 'insurer') && (
+              <button
+                onClick={() => setActivePortal('insurer')}
+                className={`flex items-center px-3 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  activePortal === 'insurer'
+                    ? 'bg-white text-indigo-900 shadow-xs border border-slate-200/80'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                }`}
+              >
+                <Shield className="w-4 h-4 mr-1.5 text-indigo-600" />
+                Insurer / TPA
+              </button>
+            )}
 
-            <button
-              onClick={() => setActivePortal('patient')}
-              className={`flex items-center px-3 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                activePortal === 'patient'
-                  ? 'bg-white text-emerald-900 shadow-xs border border-slate-200/80'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-              }`}
-            >
-              <User className="w-4 h-4 mr-1.5 text-emerald-600" />
-              Patient View
-            </button>
+            {/* Patients and Hospital can see Patient View. Insurers cannot see Patient View */}
+            {(!userSession || userSession.role === 'patient' || userSession.role === 'hospital') && (
+              <button
+                onClick={() => setActivePortal('patient')}
+                className={`flex items-center px-3 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  activePortal === 'patient'
+                    ? 'bg-white text-emerald-900 shadow-xs border border-slate-200/80'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                }`}
+              >
+                <User className="w-4 h-4 mr-1.5 text-emerald-600" />
+                Patient View
+              </button>
+            )}
 
-            <button
-              onClick={() => setActivePortal('trace')}
-              className={`flex items-center px-3 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                activePortal === 'trace'
-                  ? 'bg-white text-blue-900 shadow-xs border border-slate-200/80'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-              }`}
-            >
-              <Database className="w-4 h-4 mr-1.5 text-blue-600" />
-              Trace Commons
-            </button>
+            {/* Trace Commons visible for hospital & general review */}
+            {(!userSession || userSession.role === 'hospital' || userSession.role === 'trace') && (
+              <button
+                onClick={() => setActivePortal('trace')}
+                className={`flex items-center px-3 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  activePortal === 'trace'
+                    ? 'bg-white text-blue-900 shadow-xs border border-slate-200/80'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                }`}
+              >
+                <Database className="w-4 h-4 mr-1.5 text-blue-600" />
+                Trace Commons
+              </button>
+            )}
           </nav>
 
           {/* User Session & Utility Buttons */}
