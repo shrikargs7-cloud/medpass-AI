@@ -2,10 +2,10 @@ import React, { useState, useEffect } from 'react';
 import {
   Heart, ShieldCheck, CheckCircle2, Clock, AlertCircle,
   DollarSign, ArrowRight, UserCheck, HelpCircle, FileText,
-  Printer, LogOut, Info, AlertTriangle, PieChart, Activity, Stethoscope, Send, Check
+  Printer, LogOut, Info, AlertTriangle, PieChart, Activity, Stethoscope
 } from 'lucide-react';
 import { CaseDetail } from '../types';
-import { fetchCases, fetchCaseDetail, sendSmsApi } from '../api/client';
+import { fetchCases, fetchCaseDetail } from '../api/client';
 import { PatientCoverageDonut, FinancialWaterfallChart } from '../components/AnalyticsCharts';
 
 interface PatientDashboardProps {
@@ -20,8 +20,6 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
   const [patientCase, setPatientCase] = useState<CaseDetail | null>(null);
   const [allCases, setAllCases] = useState<CaseDetail[]>([]);
   const [loading, setLoading] = useState(true);
-  const [smsSending, setSmsSending] = useState(false);
-  const [smsStatus, setSmsStatus] = useState<string | null>(null);
 
   useEffect(() => {
     fetchCases()
@@ -55,36 +53,8 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
     window.print();
   };
 
-  const handleSendSmsSummary = async () => {
-    const targetPhone = localStorage.getItem('medpass_patient_phone') || (patient as any).phone || '+919845012345';
-    try {
-      setSmsSending(true);
-      setSmsStatus(null);
-      const summaryText = `MedPass AI Summary for ${patient.full_name}:\nCase #${patientCase.case_number}\nDiagnosis: ${patientCase.primary_diagnosis_name}\nGross Bill: ₹${patientCase.total_gross.toLocaleString('en-IN')}\nInsurance Covered: ₹${patientCase.total_covered.toLocaleString('en-IN')}\nPatient Due: ₹${patientCase.total_patient_payable.toLocaleString('en-IN')}\nStatus: ${patientCase.authorization_status}`;
-      
-      const res = await sendSmsApi(targetPhone, summaryText);
-      setSmsStatus(`✓ SMS sent to ${targetPhone}${res.sid ? ` (SID: ${res.sid})` : ''}`);
-    } catch (err: any) {
-      setSmsStatus(`⚠️ Could not send SMS: ${err.message || 'Error'}`);
-    } finally {
-      setSmsSending(false);
-    }
-  };
-
   return (
     <div className="max-w-4xl mx-auto space-y-5 font-sans">
-      {/* SMS Delivery Banner */}
-      {smsStatus && (
-        <div className={`p-3 rounded-xl border text-xs font-semibold flex items-center justify-between transition-all ${
-          smsStatus.startsWith('✓') 
-            ? 'bg-emerald-50 text-emerald-800 border-emerald-200' 
-            : 'bg-amber-50 text-amber-900 border-amber-200'
-        }`}>
-          <span>{smsStatus}</span>
-          <button onClick={() => setSmsStatus(null)} className="text-slate-400 hover:text-slate-600 text-xs cursor-pointer">✕</button>
-        </div>
-      )}
-
       {/* Patient Greeting & Status */}
       <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs flex flex-wrap items-center justify-between gap-4">
         <div>
@@ -107,15 +77,6 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
         </div>
 
         <div className="flex items-center space-x-2">
-          <button
-            onClick={handleSendSmsSummary}
-            disabled={smsSending}
-            className="flex items-center px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs transition-all cursor-pointer border border-emerald-600 disabled:opacity-50"
-          >
-            <Send className={`w-3.5 h-3.5 mr-1 ${smsSending ? 'animate-pulse' : ''}`} />
-            {smsSending ? 'Sending SMS...' : 'Send SMS Summary'}
-          </button>
-
           <button
             onClick={handlePrint}
             className="flex items-center px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all cursor-pointer border border-slate-200"
