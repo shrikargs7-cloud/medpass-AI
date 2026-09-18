@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  Bot, X, Send, ShieldCheck, Sparkles, Key, Check,
+  Bot, X, Send, ShieldCheck, Sparkles,
   AlertCircle, ChevronDown, Settings, HelpCircle, CornerDownLeft
 } from 'lucide-react';
 import { fetchMCPTools, chatMCPAgent } from '../api/client';
@@ -29,12 +29,6 @@ export const MCPAgentDrawer: React.FC<MCPAgentDrawerProps> = ({
   const [tools, setTools] = useState<MCPTool[]>([]);
   const [inputPrompt, setInputPrompt] = useState('');
   const [loading, setLoading] = useState(false);
-  const [showKeyConfig, setShowKeyConfig] = useState(false);
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem('medpass_ai_key') || '');
-  const [provider, setProvider] = useState<'gemini' | 'openai'>(() => {
-    return (localStorage.getItem('medpass_ai_provider') as any) || 'gemini';
-  });
-  const [keySavedMessage, setKeySavedMessage] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const [messages, setMessages] = useState<Message[]>([
@@ -43,6 +37,12 @@ export const MCPAgentDrawer: React.FC<MCPAgentDrawerProps> = ({
       text: 'Hello! I am MedPass AI Healthcare Assistant. I am specialized strictly in hospital admissions, clinical care plans, insurance policies, claims adjudication, and discharge readiness.\n\nHow can I assist you with your active case or policy query?'
     }
   ]);
+
+  useEffect(() => {
+    // Purge any legacy client-stored keys for zero client-side exposure
+    localStorage.removeItem('medpass_ai_key');
+    localStorage.removeItem('medpass_ai_provider');
+  }, []);
 
   useEffect(() => {
     if (isOpen) {
@@ -54,20 +54,6 @@ export const MCPAgentDrawer: React.FC<MCPAgentDrawerProps> = ({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
 
-  const handleSaveKey = () => {
-    if (apiKey.trim()) {
-      localStorage.setItem('medpass_ai_key', apiKey.trim());
-      localStorage.setItem('medpass_ai_provider', provider);
-    } else {
-      localStorage.removeItem('medpass_ai_key');
-    }
-    setKeySavedMessage(true);
-    setTimeout(() => {
-      setKeySavedMessage(false);
-      setShowKeyConfig(false);
-    }, 1200);
-  };
-
   const handleSend = async (textToSend?: string) => {
     const text = textToSend || inputPrompt;
     if (!text.trim() || loading) return;
@@ -78,8 +64,7 @@ export const MCPAgentDrawer: React.FC<MCPAgentDrawerProps> = ({
     setLoading(true);
 
     try {
-      const activeKey = apiKey.trim() || undefined;
-      const res = await chatMCPAgent(text, currentCaseId, activeKey, provider);
+      const res = await chatMCPAgent(text, currentCaseId);
       const agentMsg: Message = {
         role: 'agent',
         text: res.reply,
@@ -132,19 +117,9 @@ export const MCPAgentDrawer: React.FC<MCPAgentDrawerProps> = ({
 
             <div className="flex items-center space-x-1">
               <button
-                onClick={() => setShowKeyConfig(!showKeyConfig)}
-                className={`p-1.5 rounded-lg text-xs transition-colors cursor-pointer ${
-                  showKeyConfig
-                    ? 'bg-teal-600 text-white'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
-                }`}
-                title="Advanced: Custom LLM Override (Server-Side Key is active by default)"
-              >
-                <Key className="w-4 h-4" />
-              </button>
-              <button
                 onClick={onClose}
                 className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+                title="Close Assistant"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -160,79 +135,8 @@ export const MCPAgentDrawer: React.FC<MCPAgentDrawerProps> = ({
                 Server-Side Secured
               </span>
             </div>
-            <span className="text-[10px] text-slate-400">Zero Key Exposure</span>
+            <span className="text-[10px] text-slate-400">IRDAI Clinical & Insurance</span>
           </div>
-
-          {/* Optional Advanced Custom Key Panel (Hidden by default) */}
-          {showKeyConfig && (
-            <div className="bg-slate-900/95 border-b border-slate-800 text-white p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-teal-300 flex items-center">
-                  <Key className="w-3.5 h-3.5 mr-1.5" />
-                  Advanced: Custom LLM Override
-                </span>
-                <span className="text-[10px] text-slate-400">Optional • Server key active by default</span>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setProvider('gemini')}
-                  className={`py-1.5 text-xs font-bold rounded-lg border cursor-pointer ${
-                    provider === 'gemini'
-                      ? 'bg-teal-600 border-teal-500 text-white'
-                      : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
-                  }`}
-                >
-                  Google Gemini
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setProvider('openai')}
-                  className={`py-1.5 text-xs font-bold rounded-lg border cursor-pointer ${
-                    provider === 'openai'
-                      ? 'bg-teal-600 border-teal-500 text-white'
-                      : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
-                  }`}
-                >
-                  OpenAI (GPT-4o)
-                </button>
-              </div>
-
-              <div className="space-y-1">
-                <input
-                  type="password"
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  placeholder={provider === 'gemini' ? 'Enter Gemini API Key (AIza...)' : 'Enter OpenAI Key (sk-...)'}
-                  className="w-full text-xs bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-400 font-mono"
-                />
-              </div>
-
-              <div className="flex items-center justify-between pt-1">
-                <button
-                  type="button"
-                  onClick={handleSaveKey}
-                  className="px-3 py-1.5 bg-teal-500 hover:bg-teal-600 text-slate-950 text-xs font-bold rounded-lg flex items-center space-x-1 cursor-pointer"
-                >
-                  <Check className="w-3.5 h-3.5" />
-                  <span>{keySavedMessage ? 'Saved!' : 'Save Key'}</span>
-                </button>
-                {apiKey && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setApiKey('');
-                      localStorage.removeItem('medpass_ai_key');
-                    }}
-                    className="text-[11px] text-slate-400 hover:text-red-400"
-                  >
-                    Clear Key
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
 
           {/* Domain Bounding & Guardrail Notice Banner */}
           <div className="bg-teal-50/80 px-4 py-2 border-b border-teal-100 flex items-center justify-between text-[11px] text-teal-900">

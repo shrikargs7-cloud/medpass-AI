@@ -35,7 +35,7 @@ def run_smoke_tests():
     assert len(cases) >= 5, f"Expected 5 cases, got {len(cases)}"
     print(f"✓ Listed {len(cases)} cases")
 
-    test_case = cases[0]
+    test_case = next((c for c in cases if c["case_status"] in ["INTAKE_COMPLETE", "READY_FOR_REVIEW"]), cases[0])
     case_id = test_case["id"]
 
     res = client.post(f"/api/cases/{case_id}/evaluate")

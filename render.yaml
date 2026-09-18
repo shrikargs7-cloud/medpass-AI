@@ -4,7 +4,7 @@ services:
     name: medpass-ai-backend
     runtime: python
     region: oregon
-    plan: starter
+    plan: free
     buildCommand: "pip install -r backend/requirements.txt"
     startCommand: "python -m uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT"
     healthCheckPath: /health
@@ -33,7 +33,6 @@ services:
     name: medpass-ai-frontend
     runtime: static
     region: oregon
-    plan: starter
     buildCommand: "cd frontend && npm install && npm run build"
     staticPublishPath: frontend/dist
     routes:
@@ -42,14 +41,12 @@ services:
         destination: /index.html
     envVars:
       - key: VITE_API_URL
-        fromService:
-          type: web
-          name: medpass-ai-backend
-          property: host
+        value: https://medpass-ai-backend.onrender.com
 
 databases:
   - name: medpass-db
-    plan: starter
+    plan: free
     region: oregon
     databaseName: medpass_operational
     user: medpass_user
+    postgresMajorVersion: "16"

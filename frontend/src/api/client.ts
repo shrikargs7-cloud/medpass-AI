@@ -3,9 +3,23 @@ import {
   CohortPreview, ExportJob, MCPTool
 } from '../types';
 
-const API_BASE = import.meta.env.VITE_API_URL
-  ? `${import.meta.env.VITE_API_URL.replace(/\/$/, '')}/api`
-  : '/api';
+function resolveApiBase(): string {
+  let url = import.meta.env.VITE_API_URL;
+  if (!url || url.trim() === '' || url === '/') {
+    return '/api';
+  }
+  url = url.trim().replace(/\/+$/, '');
+  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    if (url.includes('.')) {
+      url = `https://${url}`;
+    } else {
+      return '/api';
+    }
+  }
+  return `${url}/api`;
+}
+
+const API_BASE = resolveApiBase();
 
 export async function fetchCases(status?: string, band?: string): Promise<CaseDetail[]> {
   const params = new URLSearchParams();

@@ -31,6 +31,18 @@ from backend.app.routers import sms
 async def lifespan(app: FastAPI):
     # Startup: create all tables
     Base.metadata.create_all(bind=engine)
+    try:
+        with SessionLocal() as db:
+            from backend.app.models.operational import Case
+            if db.query(Case).count() == 0:
+                print("Fresh database detected: auto-seeding golden demo cases and trace data...")
+                from scripts.seed_demo import seed as seed_demo
+                from scripts.seed_trace import seed_trace_population
+                seed_demo()
+                seed_trace_population(100)
+                print("Auto-seeding completed successfully!")
+    except Exception as e:
+        print(f"Auto-seed notification: {e}")
     yield
     # Shutdown
 

@@ -1,6 +1,14 @@
 import os
 from typing import List
+from dotenv import load_dotenv
 from pydantic_settings import BaseSettings
+
+# Proactively locate and load .env files
+_current_dir = os.path.dirname(os.path.abspath(__file__))
+_backend_dir = os.path.abspath(os.path.join(_current_dir, ".."))
+_root_dir = os.path.abspath(os.path.join(_backend_dir, ".."))
+load_dotenv(os.path.join(_backend_dir, ".env"))
+load_dotenv(os.path.join(_root_dir, ".env"))
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "MedPass AI + Trace Commons"
