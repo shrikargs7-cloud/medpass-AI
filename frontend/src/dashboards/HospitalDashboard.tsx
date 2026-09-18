@@ -202,8 +202,9 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
   const handleCreateCase = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      const activeHospitalId = cases[0]?.hospital?.id || 'aaf0c56a-847d-4c75-9822-7811df715c07';
       const payload = {
-        hospital_id: 'HOSP-APOLLO-001',
+        hospital_id: activeHospitalId,
         policy_id: newCaseForm.policy_id || undefined,
         patient: {
           patient_ref: newCaseForm.patient_ref,
