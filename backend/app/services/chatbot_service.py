@@ -179,6 +179,21 @@ class ChatbotService:
             "provider": "deterministic_engine"
         }
 
+    @classmethod
+    def get_ai_status(cls) -> Dict[str, Any]:
+        """Returns server-side status of AI integrations without exposing secrets."""
+        has_gemini = bool(settings.GEMINI_API_KEY)
+        has_openai = bool(settings.OPENAI_API_KEY)
+        engine_mode = "gemini_server_side" if has_gemini else ("openai_server_side" if has_openai else "deterministic_clinical_fallback")
+        return {
+            "gemini_active": has_gemini,
+            "openai_active": has_openai,
+            "engine_mode": engine_mode,
+            "topic_boundary": "STRICT_HEALTHCARE_CLAIMS_ONLY",
+            "server_side_secured": True,
+            "message": "Connected to MedPass AI Gemini Engine (Secure Server-Side)" if has_gemini else "MedPass AI Clinical Engine Active (Deterministic Domain Guarded)"
+        }
+
     @staticmethod
     def _call_gemini(prompt: str, context: str, api_key: str) -> str:
         """Calls Google Gemini REST API using httpx."""

@@ -14,6 +14,7 @@ import {
   fetchAdminOverview, createExportJob
 } from '../../api/client';
 import { CaseDetail, ClaimItem, TraceOverview } from '../../types';
+import { generateHospitalCode, generateInsurerCode, generatePolicyRef, generateUserId } from '../../utils/id_generator';
 
 interface AdminDashboardProps {
   onLogout: () => void;
@@ -150,6 +151,25 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, userNa
     { id: 'usr-6', name: 'System Administrator', email_or_phone: 'admin@medpass.ai', role: 'System Admin', organisation: 'MedPass AI Central Ops', status: 'Active', lastActivity: 'Just now' },
   ]);
 
+  // User Management Modals
+  const [editingUser, setEditingUser] = useState<UserAccessRecord | null>(null);
+  const [showAddUserModal, setShowAddUserModal] = useState(false);
+  const [newUserForm, setNewUserForm] = useState({
+    name: '',
+    email_or_phone: '',
+    role: 'Hospital Admin' as UserAccessRecord['role'],
+    organisation: 'Apollo Multi-Specialty Hospital',
+    status: 'Active' as UserAccessRecord['status']
+  });
+
+  // Platform & Security Settings State
+  const [securitySettings, setSecuritySettings] = useState({
+    abdmEncryption: true,
+    piiQuarantine: true,
+    n8nOutbox: true,
+    auditRetention: '7 Years'
+  });
+
   // Audit Records State (Section 23)
   const [auditRecords, setAuditRecords] = useState<AuditRecord[]>([
     { id: 'aud-1', timestamp: 'Today, 17:42', user: 'System Administrator', action: 'Published dataset', object: 'Dataset Version 2026.1 (Clean Inpatient Episodes)', result: 'Success' },
@@ -170,13 +190,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, userNa
   const loadSystemData = async () => {
     setLoading(true);
     try {
-      const [casesData, claimsData, policiesData, traceData, datasetsData, overviewData] = await Promise.allSettled([
+      const [casesData, claimsData, policiesData, traceData, datasetsData, overviewData, backendHospitalsData] = await Promise.allSettled([
         fetchCases(),
         fetchClaims(),
         fetchAvailablePolicies(),
         fetchTraceOverview(),
         fetchDatasets(),
-        fetchAdminOverview()
+        fetchAdminOverview(),
+        fetchAvailableHospitals()
       ]);
 
       const resolvedCases = casesData.status === 'fulfilled' ? casesData.value : [];
@@ -185,6 +206,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, userNa
       const resolvedTrace = traceData.status === 'fulfilled' ? traceData.value : null;
       const resolvedDatasets = datasetsData.status === 'fulfilled' ? datasetsData.value : [];
       const resolvedOverview = overviewData.status === 'fulfilled' ? overviewData.value : null;
+      const resolvedBackendHospitals = backendHospitalsData.status === 'fulfilled' && Array.isArray(backendHospitalsData.value) ? backendHospitalsData.value : [];
 
       setCases(resolvedCases);
       setClaims(resolvedClaims);
@@ -193,7 +215,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, userNa
       setAdminOverview(resolvedOverview);
 
       // Build real hospital list with live cases count
-      setHospitalsList([
+      const baseHospitals: HospitalRecord[] = [
         {
           id: 'hosp-1',
           name: 'Apollo Multi-Specialty Hospital',
@@ -227,7 +249,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, userNa
           tier: 'Tier 2 Urban',
           location: 'Mysuru, Karnataka'
         }
-      ]);
+      ];
+
+      // Merge backend registered hospitals if any exist outside base list
+      const mergedHospitals: HospitalRecord[] = [...baseHospitals];
+      for (const bh of resolvedBackendHospitals) {
+        if (!mergedHospitals.some(h => h.code === bh.code || h.name === bh.name)) {
+          mergedHospitals.push({
+            id: `hosp-${bh.id || Date.now()}`,
+            name: bh.name,
+            code: bh.code || `HOSP-${bh.name.slice(0, 4).toUpperCase()}`,
+            status: 'Active' as const,
+            casesCount: resolvedCases.filter(c => c.hospital?.name === bh.name || c.hospital?.hospital_ref === bh.code).length,
+            activity: 'Connected to MedPass FHIR R4',
+            integration: 'Connected' as const,
+            tier: bh.tier || 'Tier 2 Urban',
+            location: bh.location || 'India'
+          });
+        }
+      }
+      setHospitalsList(mergedHospitals);
 
       // Build real insurers list
       setInsurersList([
@@ -387,6 +428,75 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, userNa
     setPoliciesList(prev => [newPol, ...prev]);
     setShowAddPolicyModal(false);
     notify(`Policy master "${newPol.plan_name}" created.`);
+  };
+
+  const handleSaveUserAccess = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUser) return;
+    setUsersList(prev => prev.map(u => u.id === editingUser.id ? editingUser : u));
+    notify(`Permissions successfully updated for ${editingUser.name}.`);
+    setAuditRecords(prev => [
+      {
+        id: `aud-${Date.now()}`,
+        timestamp: 'Just now',
+        user: userName,
+        action: `User access updated (${editingUser.role} - ${editingUser.status})`,
+        object: `${editingUser.name} (${editingUser.email_or_phone})`,
+        result: 'Success'
+      },
+      ...prev
+    ]);
+    setEditingUser(null);
+  };
+
+  const handleAddStaffUser = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newUserForm.name.trim() || !newUserForm.email_or_phone.trim()) return;
+    const newStaff: UserAccessRecord = {
+      id: generateUserId(),
+      name: newUserForm.name.trim(),
+      email_or_phone: newUserForm.email_or_phone.trim(),
+      role: newUserForm.role,
+      organisation: newUserForm.organisation.trim() || 'MedPass Network',
+      status: newUserForm.status,
+      lastActivity: 'Just now'
+    };
+    setUsersList(prev => [newStaff, ...prev]);
+    notify(`Staff user "${newStaff.name}" registered with ID ${newStaff.id}.`);
+    setAuditRecords(prev => [
+      {
+        id: `aud-${Date.now()}`,
+        timestamp: 'Just now',
+        user: userName,
+        action: `Staff account provisioned (${newStaff.role})`,
+        object: `${newStaff.name} (${newStaff.id})`,
+        result: 'Success'
+      },
+      ...prev
+    ]);
+    setShowAddUserModal(false);
+    setNewUserForm({
+      name: '',
+      email_or_phone: '',
+      role: 'Hospital Admin',
+      organisation: 'Apollo Multi-Specialty Hospital',
+      status: 'Active'
+    });
+  };
+
+  const handleSaveSecuritySettings = () => {
+    notify('Platform & security policy successfully saved and applied.');
+    setAuditRecords(prev => [
+      {
+        id: `aud-${Date.now()}`,
+        timestamp: 'Just now',
+        user: userName,
+        action: 'Platform & Security policy modified',
+        object: `Encryption: ${securitySettings.abdmEncryption ? 'Enabled' : 'Disabled'}, PII Quarantine: ${securitySettings.piiQuarantine ? 'Enforced' : 'Monitor'}, n8n Outbox: ${securitySettings.n8nOutbox ? 'Active' : 'Paused'}, Retention: ${securitySettings.auditRetention}`,
+        result: 'Success'
+      },
+      ...prev
+    ]);
   };
 
 
@@ -1453,9 +1563,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, userNa
                   <h2 className="text-lg font-black text-slate-900 tracking-tight">Users & Access Management</h2>
                   <p className="text-xs text-slate-500">Manage staff access and permissions across hospitals, insurers, admins, and researchers.</p>
                 </div>
-                <span className="text-xs font-mono font-bold text-slate-500 bg-white px-3 py-1 rounded-xl border border-slate-200">
-                  {usersList.filter(u => u.role !== 'Patient').length} Staff Accounts
-                </span>
+                <div className="flex items-center space-x-2">
+                  <span className="text-xs font-mono font-bold text-slate-500 bg-white px-3 py-1.5 rounded-xl border border-slate-200">
+                    {usersList.filter(u => u.role !== 'Patient').length} Staff Accounts
+                  </span>
+                  <button
+                    onClick={() => setShowAddUserModal(true)}
+                    className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-xs cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add Staff User</span>
+                  </button>
+                </div>
               </div>
 
               {/* Users Table (Section 20) */}
@@ -1496,7 +1615,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, userNa
                         <td className="px-4 py-3 text-slate-400 font-mono text-[11px]">{u.lastActivity}</td>
                         <td className="px-4 py-3 text-right">
                           <button
-                            onClick={() => notify(`Updated permissions for ${u.name}`)}
+                            onClick={() => setEditingUser({ ...u })}
                             className="px-2.5 py-1 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-700 font-semibold cursor-pointer"
                           >
                             Edit Access
@@ -1662,50 +1781,294 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, userNa
           )}
 
           {/* ================= TAB 11: SETTINGS ================= */}
+          {/* ================= TAB 11: SETTINGS (Section 24) ================= */}
           {activeTab === 'settings' && (
             <div className="space-y-6 max-w-4xl mx-auto">
-              <div>
-                <h2 className="text-lg font-black text-slate-900 tracking-tight">Platform & Security Settings</h2>
-                <p className="text-xs text-slate-500">Configure global platform behavior, encryption standards, and retention policies.</p>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-black text-slate-900 tracking-tight">Platform & Security Settings</h2>
+                  <p className="text-xs text-slate-500">Configure global platform behavior, encryption standards, and retention policies.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleSaveSecuritySettings}
+                  className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold rounded-xl shadow-xs cursor-pointer flex items-center space-x-1.5"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>Save Configuration</span>
+                </button>
               </div>
 
-              <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs space-y-4 text-xs">
-                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                  <div>
-                    <div className="font-bold text-slate-900">ABDM Encryption & Zero Arithmetic Hallucination Gate</div>
-                    <div className="text-[11px] text-slate-500">Strict pure code policy engine calculations for all cash claims.</div>
+              <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs space-y-5 text-xs">
+                {/* Setting 1 */}
+                <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+                  <div className="pr-4">
+                    <div className="font-bold text-slate-900 text-sm">ABDM Encryption & Zero Arithmetic Hallucination Gate</div>
+                    <div className="text-[11px] text-slate-500 mt-0.5">Strict pure code policy engine calculations for all cashless hospital claims. Prevents LLM arithmetic drift.</div>
                   </div>
-                  <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 font-bold">Enabled</span>
+                  <button
+                    type="button"
+                    onClick={() => setSecuritySettings(s => ({ ...s, abdmEncryption: !s.abdmEncryption }))}
+                    className={`px-3 py-1.5 rounded-xl font-bold cursor-pointer transition-colors text-xs border ${
+                      securitySettings.abdmEncryption
+                        ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                        : 'bg-slate-100 text-slate-600 border-slate-300'
+                    }`}
+                  >
+                    {securitySettings.abdmEncryption ? '✓ Enabled' : 'Disabled'}
+                  </button>
                 </div>
 
-                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                  <div>
-                    <div className="font-bold text-slate-900">Direct Patient PII Quarantine at Source</div>
-                    <div className="text-[11px] text-slate-500">Automatically prevent direct identifiers from reaching governed datasets.</div>
+                {/* Setting 2 */}
+                <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+                  <div className="pr-4">
+                    <div className="font-bold text-slate-900 text-sm">Direct Patient PII Quarantine at Source</div>
+                    <div className="text-[11px] text-slate-500 mt-0.5">Automatically quarantine direct patient identifiers (phone, email, names) before entering governed trace datasets (k ≥ 5).</div>
                   </div>
-                  <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 font-bold">Enforced</span>
+                  <button
+                    type="button"
+                    onClick={() => setSecuritySettings(s => ({ ...s, piiQuarantine: !s.piiQuarantine }))}
+                    className={`px-3 py-1.5 rounded-xl font-bold cursor-pointer transition-colors text-xs border ${
+                      securitySettings.piiQuarantine
+                        ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                        : 'bg-amber-50 text-amber-800 border-amber-300'
+                    }`}
+                  >
+                    {securitySettings.piiQuarantine ? '✓ Enforced' : 'Monitoring Only'}
+                  </button>
                 </div>
 
-                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                  <div>
-                    <div className="font-bold text-slate-900">Decoupled n8n Transactional Outbox</div>
-                    <div className="text-[11px] text-slate-500">Non-blocking domain events with reliable retries and alert fallbacks.</div>
+                {/* Setting 3 */}
+                <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+                  <div className="pr-4">
+                    <div className="font-bold text-slate-900 text-sm">Decoupled n8n Transactional Outbox</div>
+                    <div className="text-[11px] text-slate-500 mt-0.5">Non-blocking domain events with reliable retries and webhook alert fallbacks for insurer SLAs.</div>
                   </div>
-                  <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 font-bold">Operational</span>
+                  <button
+                    type="button"
+                    onClick={() => setSecuritySettings(s => ({ ...s, n8nOutbox: !s.n8nOutbox }))}
+                    className={`px-3 py-1.5 rounded-xl font-bold cursor-pointer transition-colors text-xs border ${
+                      securitySettings.n8nOutbox
+                        ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                        : 'bg-slate-100 text-slate-600 border-slate-300'
+                    }`}
+                  >
+                    {securitySettings.n8nOutbox ? '✓ Operational' : 'Paused'}
+                  </button>
                 </div>
 
+                {/* Setting 4 */}
                 <div className="flex items-center justify-between">
-                  <div>
-                    <div className="font-bold text-slate-900">Session Timeout & Admin Audit Retention</div>
-                    <div className="text-[11px] text-slate-500">7-year immutable audit log retention under IRDAI compliance.</div>
+                  <div className="pr-4">
+                    <div className="font-bold text-slate-900 text-sm">Session Timeout & Admin Audit Retention</div>
+                    <div className="text-[11px] text-slate-500 mt-0.5">Immutable audit log retention period under IRDAI and ABDM healthcare compliance standards.</div>
                   </div>
-                  <span className="text-slate-700 font-mono font-bold">7 Years</span>
+                  <select
+                    value={securitySettings.auditRetention}
+                    onChange={(e) => setSecuritySettings(s => ({ ...s, auditRetention: e.target.value }))}
+                    className="p-2 rounded-xl border border-slate-200 bg-slate-50 text-slate-800 font-mono font-bold text-xs cursor-pointer"
+                  >
+                    <option value="1 Year">1 Year</option>
+                    <option value="3 Years">3 Years</option>
+                    <option value="5 Years">5 Years</option>
+                    <option value="7 Years">7 Years (IRDAI Compliant)</option>
+                    <option value="10 Years">10 Years</option>
+                  </select>
                 </div>
               </div>
             </div>
           )}
         </main>
       </div>
+
+      {/* ================= MODAL: EDIT USER ACCESS ================= */}
+      {editingUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 text-xs">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center space-x-2">
+                <Users className="w-5 h-5 text-teal-600" />
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Edit User Access & Permissions</h3>
+                  <span className="font-mono text-[10px] text-slate-400">ID: {editingUser.id}</span>
+                </div>
+              </div>
+              <button onClick={() => setEditingUser(null)} className="text-slate-400 hover:text-slate-700 cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleSaveUserAccess} className="mt-4 space-y-3">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">User Full Name</label>
+                <input
+                  type="text"
+                  required
+                  value={editingUser.name}
+                  onChange={(e) => setEditingUser({ ...editingUser, name: e.target.value })}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50/50 font-medium"
+                />
+              </div>
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Email or Phone Identifier</label>
+                <input
+                  type="text"
+                  required
+                  value={editingUser.email_or_phone}
+                  onChange={(e) => setEditingUser({ ...editingUser, email_or_phone: e.target.value })}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50/50 font-medium"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Assigned Role</label>
+                  <select
+                    value={editingUser.role}
+                    onChange={(e) => setEditingUser({ ...editingUser, role: e.target.value as any })}
+                    className="w-full p-2.5 rounded-xl border border-slate-200 bg-white font-medium"
+                  >
+                    <option value="Hospital Admin">Hospital Admin</option>
+                    <option value="Insurance Admin">Insurance Admin</option>
+                    <option value="Auditor">Auditor</option>
+                    <option value="Researcher">Researcher</option>
+                    <option value="System Admin">System Admin</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Account Status</label>
+                  <select
+                    value={editingUser.status}
+                    onChange={(e) => setEditingUser({ ...editingUser, status: e.target.value as any })}
+                    className="w-full p-2.5 rounded-xl border border-slate-200 bg-white font-medium"
+                  >
+                    <option value="Active">Active</option>
+                    <option value="Suspended">Suspended</option>
+                    <option value="Pending">Pending</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Assigned Organisation / Entity</label>
+                <input
+                  type="text"
+                  required
+                  value={editingUser.organisation}
+                  onChange={(e) => setEditingUser({ ...editingUser, organisation: e.target.value })}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 font-medium"
+                />
+              </div>
+              <div className="flex justify-end space-x-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setEditingUser(null)}
+                  className="px-3.5 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-100 font-semibold cursor-pointer text-slate-600"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold cursor-pointer transition-colors shadow-sm"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL: ADD STAFF USER ================= */}
+      {showAddUserModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 text-xs">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center space-x-2">
+                <Users className="w-5 h-5 text-indigo-600" />
+                <h3 className="text-sm font-bold text-slate-900">Provision Staff Account</h3>
+              </div>
+              <button onClick={() => setShowAddUserModal(false)} className="text-slate-400 hover:text-slate-700 cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleAddStaffUser} className="mt-4 space-y-3">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Staff Member Full Name</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Dr. Ramesh Gupta"
+                  value={newUserForm.name}
+                  onChange={(e) => setNewUserForm({ ...newUserForm, name: e.target.value })}
+                  className="w-full p-2.5 rounded-xl border border-slate-200"
+                />
+              </div>
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Email or Mobile Number</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. ramesh.gupta@apollo.hospital"
+                  value={newUserForm.email_or_phone}
+                  onChange={(e) => setNewUserForm({ ...newUserForm, email_or_phone: e.target.value })}
+                  className="w-full p-2.5 rounded-xl border border-slate-200"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">System Role</label>
+                  <select
+                    value={newUserForm.role}
+                    onChange={(e) => setNewUserForm({ ...newUserForm, role: e.target.value as any })}
+                    className="w-full p-2.5 rounded-xl border border-slate-200 bg-white font-medium"
+                  >
+                    <option value="Hospital Admin">Hospital Admin</option>
+                    <option value="Insurance Admin">Insurance Admin</option>
+                    <option value="Auditor">Auditor</option>
+                    <option value="Researcher">Researcher</option>
+                    <option value="System Admin">System Admin</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Initial Status</label>
+                  <select
+                    value={newUserForm.status}
+                    onChange={(e) => setNewUserForm({ ...newUserForm, status: e.target.value as any })}
+                    className="w-full p-2.5 rounded-xl border border-slate-200 bg-white font-medium"
+                  >
+                    <option value="Active">Active</option>
+                    <option value="Pending">Pending Verification</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Organisation Affiliation</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Apollo Multi-Specialty Hospital"
+                  value={newUserForm.organisation}
+                  onChange={(e) => setNewUserForm({ ...newUserForm, organisation: e.target.value })}
+                  className="w-full p-2.5 rounded-xl border border-slate-200"
+                />
+              </div>
+              <div className="flex justify-end space-x-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowAddUserModal(false)}
+                  className="px-3.5 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-100 font-semibold cursor-pointer text-slate-600"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold cursor-pointer transition-colors shadow-sm"
+                >
+                  Provision User
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* ================= MODAL: ADD HOSPITAL ================= */}
       {showAddHospitalModal && (

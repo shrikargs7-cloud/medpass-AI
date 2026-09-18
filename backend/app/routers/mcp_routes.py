@@ -12,6 +12,11 @@ from backend.app.models.operational import Case
 
 router = APIRouter(prefix="/mcp", tags=["Model Context Protocol (MCP)"])
 
+@router.get("/status")
+def get_mcp_ai_status():
+    """Returns AI engine availability and security state without exposing sensitive keys."""
+    return ChatbotService.get_ai_status()
+
 @router.get("/tools", response_model=List[MCPToolDefinition])
 def list_mcp_tools():
     """Returns definitions of all registered MedPass & Trace MCP tools."""

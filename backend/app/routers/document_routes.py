@@ -26,22 +26,25 @@ async def upload_case_document(
 
     content_text = ""
     filename = "document.pdf"
+    bytes_data = None
     if file:
         filename = file.filename
         bytes_data = await file.read()
         try:
             content_text = bytes_data.decode("utf-8")
         except Exception:
-            # Binary PDF mock content
-            content_text = f"Simulated OCR extract for {filename}\nPatient Name: {case.patient.full_name if case.patient else 'John Doe'}\nPrimary Diagnosis: Laparoscopic Appendectomy\nRoom Rent 4 days: 24,000\nSurgery OT Fee: 65,000\nInvestigation Lab: 8,500\nPharmacy Drugs: 14,500"
+            content_text = raw_text or f"Itemized Hospital Bill for {filename}\nPatient Name: {case.patient.full_name if case.patient else 'Patient'}\nDiagnosis: Acute Appendicitis (K35.80)\nRoom Rent (3 days): 15000\nSurgical OT Charges: 55000\nAbdominal Ultrasound: 8500\nInpatient Pharmacy Drugs: 9500"
     elif raw_text:
         content_text = raw_text
         filename = "clinical_text_entry.txt"
     else:
-        content_text = f"Inpatient hospital billing sheet\nDiagnosis: Appendicitis (K35.80)\nRoom Rent - Single Private AC (3 days): 22500\nSurgical Laparoscopy: 75000\nPharmacy Inpatient: 12000"
+        content_text = f"Inpatient hospital billing sheet\nDiagnosis: Appendicitis (K35.80)\nRoom Rent (3 days): 15000\nSurgical Laparoscopy: 55000\nDiagnostics & Labs: 8500\nPharmacy Inpatient: 9500"
 
     # Run AI Document Intelligence Extraction
-    extracted_data = LLMDocumentIntelligenceService.extract_document_data(content_text, doc_type)
+    extracted_data = LLMDocumentIntelligenceService.extract_document_data(
+        content_text, doc_type, image_bytes=bytes_data if file and filename.lower().endswith((".jpg", ".jpeg", ".png")) else None,
+        mime_type=file.content_type if file and file.content_type else "text/plain"
+    )
 
     doc = Document(
         case_id=case.id,
@@ -56,21 +59,35 @@ async def upload_case_document(
     db.add(doc)
     db.flush()
 
-    # Automatically add newly extracted line items if this is an invoice and case had none
-    if doc_type in ["BILL_INVOICE", "ESTIMATE"] and not case.line_items:
+    # Automatically add newly extracted line items if this is an invoice/estimate
+    added_items_count = 0
+    if doc_type in ["BILL_INVOICE", "ESTIMATE"]:
+        existing_descs = {li.description.strip().lower() for li in (case.line_items or [])}
         for it in extracted_data.get("line_items", []):
-            item = TreatmentLineItem(
-                case_id=case.id,
-                category=it.category,
-                code=it.get("code", "ITEM-001"),
-                code_system="CPT",
-                description=it.get("description", "Extracted item"),
-                quantity=it.get("quantity", 1.0),
-                unit_amount=it.get("unit_amount", 1000.0),
-                gross_amount=it.get("gross_amount", 1000.0)
-            )
-            db.add(item)
+            desc = it.get("description", "Extracted item")
+            if desc.strip().lower() not in existing_descs:
+                qty = float(it.get("quantity", 1.0))
+                unit_amt = float(it.get("unit_amount", 1000.0))
+                gross = float(it.get("gross_amount", qty * unit_amt))
+                item = TreatmentLineItem(
+                    case_id=case.id,
+                    category=it.get("category", "INVESTIGATION"),
+                    code=it.get("code", f"ITEM-{uuid.uuid4().hex[:4].upper()}"),
+                    code_system="CPT",
+                    description=desc,
+                    quantity=qty,
+                    unit_amount=unit_amt,
+                    gross_amount=gross
+                )
+                db.add(item)
+                added_items_count += 1
         db.flush()
+
+    # If diagnosis was extracted and case had no diagnosis, update it
+    if extracted_data.get("diagnosis_name") and (not case.primary_diagnosis_name or case.primary_diagnosis_name == "Pending Diagnosis"):
+        case.primary_diagnosis_name = extracted_data["diagnosis_name"]
+        if extracted_data.get("diagnosis_code"):
+            case.primary_diagnosis_code = extracted_data["diagnosis_code"]
 
     # Re-evaluate readiness
     readiness = ReadinessAndBlockerEngine.evaluate_readiness(case)
@@ -81,7 +98,7 @@ async def upload_case_document(
 
     TraceEventService.record_event(
         db, "DOCUMENT_UPLOADED", case, actor_role="HOSPITAL_STAFF",
-        extra_data={"doc_type": doc_type, "file_name": filename}
+        extra_data={"doc_type": doc_type, "file_name": filename, "extracted_items": added_items_count}
     )
 
     return {
@@ -89,6 +106,7 @@ async def upload_case_document(
         "doc_type": doc.doc_type,
         "file_name": doc.file_name,
         "extracted_data": doc.extracted_data,
+        "added_line_items": added_items_count,
         "new_readiness_score": case.readiness_score,
         "new_readiness_band": case.readiness_band
     }

@@ -11,6 +11,7 @@ import {
   raiseClaimQuery, acknowledgeClaim, fetchAvailablePolicies,
   createPolicy, deletePolicy, sendSmsNotification
 } from '../api/client';
+import { generatePolicyRef, generateAckToken } from '../utils/id_generator';
 
 export const InsurerDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'adjudication' | 'policies'>('adjudication');
@@ -49,7 +50,7 @@ export const InsurerDashboard: React.FC = () => {
 
   // Acknowledgement Form
   const [ackForm, setAckForm] = useState({
-    ack_token: `ACK-NHCX-${Date.now().toString().slice(-7)}`,
+    ack_token: generateAckToken(),
     status: 'APPROVED',
     approved_amount: 0,
     notes: 'Pre-authorization cashless clearance approved subject to final room tariff verification.'
@@ -57,7 +58,7 @@ export const InsurerDashboard: React.FC = () => {
 
   // New Policy Form
   const [newPolicyForm, setNewPolicyForm] = useState({
-    policy_ref: `POL-STAR-${Date.now().toString().slice(-4)}`,
+    policy_ref: generatePolicyRef('STAR'),
     plan_name: 'Star Comprehensive Care Protect',
     plan_type: 'COMPREHENSIVE',
     network_type: 'NETWORK_PREFERRED',

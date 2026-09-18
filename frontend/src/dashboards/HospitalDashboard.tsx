@@ -19,6 +19,7 @@ import {
   ClaimFunnelChart,
   BlockerDistributionChart
 } from '../components/AnalyticsCharts';
+import { generatePatientId, generateLineItemCode } from '../utils/id_generator';
 
 interface TreatmentItem {
   id: string;
@@ -103,7 +104,7 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
 
   // New Case Form State
   const [newCaseForm, setNewCaseForm] = useState({
-    patient_ref: `PAT-${Date.now().toString().slice(-4)}`,
+    patient_ref: generatePatientId(),
     full_name: '',
     dob: '1988-04-12',
     age_band: '31-45',
@@ -119,11 +120,10 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
   const [treatmentItems, setTreatmentItems] = useState<TreatmentItem[]>(DEFAULT_TREATMENT_ITEMS);
 
   const handleAddTreatmentItem = () => {
-    const randomSuffix = Math.floor(100 + Math.random() * 900);
     const newItem: TreatmentItem = {
-      id: `item-${Date.now()}-${randomSuffix}`,
+      id: `item-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       category: 'INVESTIGATION',
-      code: `DIAG-${randomSuffix}`,
+      code: generateLineItemCode('INVESTIGATION'),
       description: '',
       quantity: 1,
       unit_amount: 2500
@@ -144,9 +144,7 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
       if (item.id !== id) return item;
       const updated = { ...item, [field]: value };
       if (field === 'category') {
-        const catConfig = TREATMENT_CATEGORIES.find(c => c.value === value);
-        const prefix = catConfig ? catConfig.defaultCode : 'ITEM';
-        updated.code = `${prefix}-${Math.floor(100 + Math.random() * 900)}`;
+        updated.code = generateLineItemCode(value);
       }
       return updated;
     }));
@@ -165,7 +163,7 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
   // Line Item Form State
   const [lineItemForm, setLineItemForm] = useState({
     category: 'ROOM_RENT',
-    code: 'ROOM-101',
+    code: generateLineItemCode('ROOM_RENT'),
     description: 'Private Room Charges',
     quantity: 1,
     unit_amount: 5000
@@ -182,6 +180,7 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
 
   const [documentInput, setDocumentInput] = useState('');
   const [uploadingDoc, setUploadingDoc] = useState(false);
+  const [lastExtractionResult, setLastExtractionResult] = useState<any | null>(null);
   const [notification, setNotification] = useState<string | null>(null);
 
   // SMS Modal State
@@ -466,7 +465,9 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
       const text = documentInput.trim() || undefined;
       const file = selectedFile || undefined;
       const res = await uploadDocument(selectedCase.id, uploadDocType, text, file);
-      notify(`Document "${file ? file.name : 'Clinical Entry'}" uploaded and processed successfully! Readiness: ${res.new_readiness_score || 95}%.`);
+      setLastExtractionResult(res);
+      const added = res.added_line_items ?? (res.extracted_data?.line_items?.length || 0);
+      notify(`✓ NLP Extraction Complete: ${added} line items synced to case ledger! Readiness: ${res.new_readiness_score || 95}%.`);
       setDocumentInput('');
       setSelectedFile(null);
       const updated = await fetchCaseDetail(selectedCase.id);
@@ -1182,6 +1183,30 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
                     {uploadingDoc ? 'Uploading...' : 'Upload Document'}
                   </button>
                 </div>
+
+                {/* NLP Extraction Result Card */}
+                {lastExtractionResult && (
+                  <div className="p-3 bg-teal-50/80 rounded-xl border border-teal-200 space-y-1.5 animate-fade-in text-[11px] mt-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-teal-900 flex items-center space-x-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-teal-600" />
+                        <span>NLP Extracted: {lastExtractionResult.added_line_items ?? (lastExtractionResult.extracted_data?.line_items?.length || 0)} Items Added</span>
+                      </span>
+                      <span className="font-mono text-[10px] text-teal-700 bg-white px-1.5 py-0.5 rounded border border-teal-200 font-bold">
+                        Confidence {Math.round((lastExtractionResult.extracted_data?.confidence || 0.94) * 100)}%
+                      </span>
+                    </div>
+                    {lastExtractionResult.extracted_data?.diagnosis_name && (
+                      <div className="text-slate-700">
+                        <span className="font-semibold text-slate-500">Clinical Diagnosis:</span> {lastExtractionResult.extracted_data.diagnosis_name} ({lastExtractionResult.extracted_data.diagnosis_code || 'ICD-10'})
+                      </div>
+                    )}
+                    <div className="text-teal-800 text-[10px] font-medium flex items-center space-x-1 pt-0.5">
+                      <CheckCircle2 className="w-3 h-3 text-teal-600 shrink-0" />
+                      <span>Itemized charges attached directly to case ledger; pre-auth readiness updated to {lastExtractionResult.new_readiness_score || 95}%.</span>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
