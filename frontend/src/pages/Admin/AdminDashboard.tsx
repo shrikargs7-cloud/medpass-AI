@@ -1536,7 +1536,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, userNa
                                 });
                                 notify(`✓ CSV Dataset Export ready! Downloading ${exportRes.download_url}...`);
                                 if (exportRes.download_url) {
-                                  window.open(exportRes.download_url, '_blank');
+                                  const link = document.createElement('a');
+                                  link.href = exportRes.download_url;
+                                  link.setAttribute('download', '');
+                                  document.body.appendChild(link);
+                                  link.click();
+                                  document.body.removeChild(link);
                                 }
                               } catch (err: any) {
                                 alert(err.message || 'Export failed');
@@ -1564,7 +1569,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, userNa
                                 });
                                 notify(`✓ Parquet Dataset Export ready! Downloading ${exportRes.download_url}...`);
                                 if (exportRes.download_url) {
-                                  window.open(exportRes.download_url, '_blank');
+                                  const link = document.createElement('a');
+                                  link.href = exportRes.download_url;
+                                  link.setAttribute('download', '');
+                                  document.body.appendChild(link);
+                                  link.click();
+                                  document.body.removeChild(link);
                                 }
                               } catch (err: any) {
                                 alert(err.message || 'Export failed');

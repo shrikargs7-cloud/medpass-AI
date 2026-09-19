@@ -222,7 +222,14 @@ class TraceExportEngine:
                 })
 
             df_unified = pd.DataFrame(unified_data if unified_data else [{"Message": "No operational data found"}])
+            
+            # Export to both CSV and Parquet formats
             df_unified.to_csv(os.path.join(data_dir, "operational_dataset.csv"), index=False)
+            try:
+                df_unified.to_parquet(os.path.join(data_dir, "operational_dataset.parquet"), index=False)
+            except Exception as e:
+                # Fallback if pyarrow/fastparquet is missing in environment
+                pass
 
             # 2. FHIR R4 NDJSON representation
             fhir_file = os.path.join(data_dir, "fhir_bundle.ndjson")
