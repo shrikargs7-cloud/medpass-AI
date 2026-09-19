@@ -1,8 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import {
-  Bot, X, Send, ShieldCheck, Sparkles,
-  AlertCircle, ChevronDown, Settings, HelpCircle, CornerDownLeft
-} from 'lucide-react';
+import { Bot, X, Send, Sparkles, RefreshCw, User, FileText } from 'lucide-react';
 import { fetchMCPTools, chatMCPAgent } from '../api/client';
 import { MCPTool } from '../types';
 
@@ -15,10 +12,7 @@ interface MCPAgentDrawerProps {
 interface Message {
   role: 'user' | 'agent';
   text: string;
-  bounded?: boolean;
-  guardrail_status?: string;
-  provider?: string;
-  tools?: any[];
+  time?: string;
 }
 
 export const MCPAgentDrawer: React.FC<MCPAgentDrawerProps> = ({
@@ -31,15 +25,15 @@ export const MCPAgentDrawer: React.FC<MCPAgentDrawerProps> = ({
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      role: 'agent',
-      text: 'Hello! I am MedPass AI Healthcare Assistant. I am specialized strictly in hospital admissions, clinical care plans, insurance policies, claims adjudication, and discharge readiness.\n\nHow can I assist you with your active case or policy query?'
-    }
-  ]);
+  const initialWelcomeMessage = (): Message => ({
+    role: 'agent',
+    text: `Hello! I am **MedPass AI Clinical Assistant**, your intelligent co-pilot for hospital admissions, claims adjudication, and discharge clearance.\n\nYou can ask me to search active patient files, verify insurance policy clauses, calculate co-pay and room rent deductions, or review clinical care protocols.`,
+    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  });
+
+  const [messages, setMessages] = useState<Message[]>([initialWelcomeMessage()]);
 
   useEffect(() => {
-    // Purge any legacy client-stored keys for zero client-side exposure
     localStorage.removeItem('medpass_ai_key');
     localStorage.removeItem('medpass_ai_provider');
   }, []);
@@ -54,11 +48,19 @@ export const MCPAgentDrawer: React.FC<MCPAgentDrawerProps> = ({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
 
+  const handleResetChat = () => {
+    setMessages([initialWelcomeMessage()]);
+  };
+
   const handleSend = async (textToSend?: string) => {
     const text = textToSend || inputPrompt;
     if (!text.trim() || loading) return;
 
-    const userMsg: Message = { role: 'user', text };
+    const userMsg: Message = {
+      role: 'user',
+      text,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
     setMessages((prev) => [...prev, userMsg]);
     setInputPrompt('');
     setLoading(true);
@@ -68,10 +70,7 @@ export const MCPAgentDrawer: React.FC<MCPAgentDrawerProps> = ({
       const agentMsg: Message = {
         role: 'agent',
         text: res.reply,
-        bounded: res.bounded,
-        guardrail_status: res.guardrail_status,
-        provider: res.provider,
-        tools: res.tools_invoked
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
       setMessages((prev) => [...prev, agentMsg]);
     } catch (err: any) {
@@ -79,7 +78,8 @@ export const MCPAgentDrawer: React.FC<MCPAgentDrawerProps> = ({
         ...prev,
         {
           role: 'agent',
-          text: 'Unable to connect to assistant service: ' + (err.message || 'Check network connection.')
+          text: 'Unable to connect to assistant service: ' + (err.message || 'Please verify network connection.'),
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         }
       ]);
     } finally {
@@ -100,23 +100,33 @@ export const MCPAgentDrawer: React.FC<MCPAgentDrawerProps> = ({
           
           {/* Top Header */}
           <div className="p-4 border-b border-slate-200 bg-slate-900 text-white flex items-center justify-between">
-            <div className="flex items-center space-x-2.5">
-              <div className="w-8 h-8 rounded-xl bg-teal-500/20 text-teal-400 flex items-center justify-center border border-teal-500/40">
+            <div className="flex items-center space-x-3">
+              <div className="w-9 h-9 rounded-2xl bg-teal-500/20 text-teal-400 flex items-center justify-center border border-teal-500/40 shadow-inner">
                 <Bot className="w-5 h-5" />
               </div>
               <div>
-                <div className="flex items-center space-x-1.5">
-                  <h2 className="text-sm font-bold text-white">MedPass AI Assistant</h2>
-                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-teal-950 text-teal-300 border border-teal-500/40 uppercase">
-                    Topic Bounded
+                <div className="flex items-center space-x-2">
+                  <h2 className="text-sm font-bold text-white tracking-tight">MedPass AI Assistant</h2>
+                  <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded-full bg-emerald-950/80 text-emerald-300 border border-emerald-500/30 text-[9px] font-medium">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span>Ready</span>
                   </span>
                 </div>
-                <p className="text-[11px] text-slate-400">Clinical & Insurance Specialist</p>
+                <p className="text-[11px] text-slate-400">Clinical, Claims & Care Plan Co-Pilot</p>
               </div>
             </div>
 
             <div className="flex items-center space-x-1">
               <button
+                type="button"
+                onClick={handleResetChat}
+                className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+                title="Reset Conversation"
+              >
+                <RefreshCw className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
                 onClick={onClose}
                 className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
                 title="Close Assistant"
@@ -126,32 +136,17 @@ export const MCPAgentDrawer: React.FC<MCPAgentDrawerProps> = ({
             </div>
           </div>
 
-          {/* Secure Server-Side AI Status Banner */}
-          <div className="bg-slate-900 px-4 py-2 border-b border-slate-800 flex items-center justify-between text-[11px]">
-            <div className="flex items-center space-x-2 text-teal-300">
-              <Sparkles className="w-3.5 h-3.5 text-teal-400 animate-pulse" />
-              <span className="font-semibold">MedPass Gemini AI Active</span>
-              <span className="px-1.5 py-0.2 rounded bg-teal-900/60 text-teal-300 font-mono text-[9px] border border-teal-700/50">
-                Server-Side Secured
-              </span>
+          {/* Active Case Context Chip */}
+          {currentCaseId && (
+            <div className="bg-teal-50/70 px-4 py-2 border-b border-teal-100/80 flex items-center justify-between text-[11px] text-teal-900">
+              <div className="flex items-center space-x-1.5 font-medium">
+                <FileText className="w-3.5 h-3.5 text-teal-700 shrink-0" />
+                <span>Active Context:</span>
+                <span className="font-mono font-bold text-teal-800">{currentCaseId}</span>
+              </div>
+              <span className="text-[10px] text-teal-700/80 font-semibold uppercase tracking-wider">In Focus</span>
             </div>
-            <span className="text-[10px] text-slate-400">IRDAI Clinical & Insurance</span>
-          </div>
-
-          {/* Domain Bounding & Guardrail Notice Banner */}
-          <div className="bg-teal-50/80 px-4 py-2 border-b border-teal-100 flex items-center justify-between text-[11px] text-teal-900">
-            <div className="flex items-center space-x-1.5">
-              <ShieldCheck className="w-3.5 h-3.5 text-teal-700 shrink-0" />
-              <span>
-                <strong>Strict Boundary:</strong> Answers healthcare, policy & discharge only.
-              </span>
-            </div>
-            {currentCaseId && (
-              <span className="font-mono font-bold text-[10px] px-1.5 py-0.5 rounded bg-teal-200/60 text-teal-800">
-                Case Active
-              </span>
-            )}
-          </div>
+          )}
 
           {/* Chat Messages */}
           <div className="flex-1 overflow-y-auto p-4 space-y-3.5 bg-slate-50/50">
@@ -161,60 +156,75 @@ export const MCPAgentDrawer: React.FC<MCPAgentDrawerProps> = ({
                 className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}
               >
                 <div
-                  className={`max-w-[88%] rounded-2xl px-4 py-2.5 text-xs ${
+                  className={`max-w-[90%] rounded-2xl px-4 py-3 text-xs leading-relaxed ${
                     m.role === 'user'
-                      ? 'bg-teal-600 text-white shadow-xs'
-                      : m.guardrail_status === 'OFF_TOPIC_REJECTED'
-                      ? 'bg-amber-50 border border-amber-300 text-amber-900 shadow-xs'
-                      : 'bg-white border border-slate-200 text-slate-800 shadow-xs'
+                      ? 'bg-teal-600 text-white shadow-xs rounded-tr-xs'
+                      : 'bg-white border border-slate-200 text-slate-900 shadow-xs rounded-tl-xs'
                   }`}
                 >
-                  {m.guardrail_status === 'OFF_TOPIC_REJECTED' && (
-                    <div className="flex items-center space-x-1 text-[10px] font-bold text-amber-800 mb-1 pb-1 border-b border-amber-200">
-                      <AlertCircle className="w-3 h-3 text-amber-600" />
-                      <span>Topic Boundary Guardrail Activated</span>
-                    </div>
-                  )}
-                  <p className="whitespace-pre-line leading-relaxed">{m.text}</p>
+                  <div className="whitespace-pre-line prose prose-xs max-w-none">
+                    {m.text}
+                  </div>
                 </div>
+                {m.time && (
+                  <span className="text-[9px] text-slate-400 mt-1 px-1 font-mono">
+                    {m.time}
+                  </span>
+                )}
               </div>
             ))}
 
             {loading && (
-              <div className="flex items-center space-x-2 text-xs text-slate-500 bg-white border border-slate-200 p-3 rounded-2xl w-fit shadow-xs">
+              <div className="flex items-center space-x-2 text-xs text-slate-600 bg-white border border-slate-200 px-3.5 py-2.5 rounded-2xl w-fit shadow-xs animate-fade-in">
                 <Sparkles className="w-3.5 h-3.5 text-teal-600 animate-spin" />
-                <span>Assistant verifying healthcare domain...</span>
+                <span className="font-medium">MedPass AI is analyzing...</span>
               </div>
             )}
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Quick Healthcare Prompts */}
-          <div className="px-4 py-2 bg-white border-t border-slate-100 flex flex-wrap gap-1.5">
-            <button
-              onClick={() => handleSend("What blockers are preventing discharge?")}
-              className="text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 py-1 rounded-lg transition-colors cursor-pointer"
-            >
-              Check discharge blockers
-            </button>
-            <button
-              onClick={() => handleSend("Why was the room rent capped and how much is patient payable?")}
-              className="text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 py-1 rounded-lg transition-colors cursor-pointer"
-            >
-              Room rent deduction rule
-            </button>
-            <button
-              onClick={() => handleSend("Explain standard cashless pre-authorization process")}
-              className="text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 py-1 rounded-lg transition-colors cursor-pointer"
-            >
-              Pre-auth process
-            </button>
-            <button
-              onClick={() => handleSend("What is the clinical protocol for Appendicitis (K35.80)?")}
-              className="text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 py-1 rounded-lg transition-colors cursor-pointer"
-            >
-              Appendicitis protocol
-            </button>
+          {/* Quick Healthcare Suggestion Pills */}
+          <div className="px-3.5 py-2 bg-white border-t border-slate-100">
+            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 px-0.5">
+              Suggested Inquiries
+            </div>
+            <div className="flex flex-wrap gap-1.5 max-h-20 overflow-y-auto">
+              <button
+                type="button"
+                onClick={() => handleSend("fetch Rahul details")}
+                className="text-[10px] bg-slate-100 hover:bg-teal-50 hover:text-teal-800 hover:border-teal-300 border border-slate-200 text-slate-700 px-2.5 py-1 rounded-lg transition-colors cursor-pointer font-medium"
+              >
+                🔍 Fetch Rahul details
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSend("tell me the queries that I can ask you")}
+                className="text-[10px] bg-slate-100 hover:bg-teal-50 hover:text-teal-800 hover:border-teal-300 border border-slate-200 text-slate-700 px-2.5 py-1 rounded-lg transition-colors cursor-pointer font-medium"
+              >
+                💡 What queries can I ask?
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSend("What blockers are preventing discharge?")}
+                className="text-[10px] bg-slate-100 hover:bg-teal-50 hover:text-teal-800 hover:border-teal-300 border border-slate-200 text-slate-700 px-2.5 py-1 rounded-lg transition-colors cursor-pointer font-medium"
+              >
+                ⚡ Check discharge blockers
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSend("Explain room rent deduction rule")}
+                className="text-[10px] bg-slate-100 hover:bg-teal-50 hover:text-teal-800 hover:border-teal-300 border border-slate-200 text-slate-700 px-2.5 py-1 rounded-lg transition-colors cursor-pointer font-medium"
+              >
+                🛡️ Room rent deduction rule
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSend("Explain standard cashless pre-authorization process")}
+                className="text-[10px] bg-slate-100 hover:bg-teal-50 hover:text-teal-800 hover:border-teal-300 border border-slate-200 text-slate-700 px-2.5 py-1 rounded-lg transition-colors cursor-pointer font-medium"
+              >
+                📋 Pre-auth process
+              </button>
+            </div>
           </div>
 
           {/* Input Box */}
@@ -230,13 +240,13 @@ export const MCPAgentDrawer: React.FC<MCPAgentDrawerProps> = ({
                 type="text"
                 value={inputPrompt}
                 onChange={(e) => setInputPrompt(e.target.value)}
-                placeholder="Ask about patient case, policy, or blockers..."
-                className="flex-1 text-xs border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-teal-500 bg-slate-50"
+                placeholder="Ask about patient files, policy rules, care plans, or blockers..."
+                className="flex-1 text-xs border border-slate-200 rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-teal-500 bg-slate-50 placeholder-slate-400 font-medium"
               />
               <button
                 type="submit"
                 disabled={loading || !inputPrompt.trim()}
-                className="p-2.5 bg-teal-600 text-white rounded-xl hover:bg-teal-700 disabled:opacity-50 transition-colors cursor-pointer"
+                className="p-2.5 bg-teal-600 text-white rounded-xl hover:bg-teal-700 disabled:opacity-50 transition-colors cursor-pointer shadow-xs"
                 title="Send query"
               >
                 <Send className="w-4 h-4" />

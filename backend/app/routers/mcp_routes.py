@@ -72,12 +72,13 @@ def mcp_agent_chat(payload: MCPAgentChatRequest, db: Session = Depends(get_db)):
             }
             tools_invoked.append({"tool": "get_case", "case_number": case.case_number})
 
-    # Call topic-bounded chatbot service
+    # Call MedPass intelligent clinical & claims assistant
     result = ChatbotService.answer_query(
         prompt=payload.prompt,
         case_context=case_context,
         custom_api_key=payload.api_key,
-        provider=payload.provider
+        provider=payload.provider,
+        db=db
     )
 
     return {

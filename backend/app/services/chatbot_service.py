@@ -3,147 +3,83 @@ import json
 import logging
 from typing import Dict, Any, List, Optional
 import httpx
+from sqlalchemy.orm import Session
 
 from backend.app.config import settings
+from backend.app.models.operational import Patient, Case, Hospital, Policy
 
 logger = logging.getLogger("medpass_chatbot")
 
-# 1. Allowed healthcare and insurance keywords & topics
-HEALTHCARE_KEYWORDS = [
-    # Clinical & Medical
-    "health", "hospital", "patient", "doctor", "nurse", "physician", "clinic",
-    "disease", "diagnosis", "symptom", "illness", "infection", "appendicitis",
-    "cardiac", "heart", "coronary", "infarction", "knee", "arthritis", "cholecystitis",
-    "gallbladder", "fever", "pain", "surgery", "operation", "ot", "laparoscopic",
-    "procedure", "medication", "medicine", "drug", "pharmacy", "prescription",
-    "lab", "investigation", "blood", "imaging", "x-ray", "mri", "ct scan", "ultrasound",
-    "icd", "cpt", "vital", "treatment", "care plan",
-    # Operational & Administrative
-    "roster", "bed", "ward", "icu", "admit", "admission", "discharge", "readiness",
-    "blocker", "stuck", "pending", "status", "summary", "record",
-    # Insurance & Financial
-    "insurance", "policy", "tpa", "insurer", "payer", "cashless", "claim", "claims",
-    "preauth", "pre-auth", "authorization", "coverage", "covered", "payable",
-    "deductible", "co-pay", "copay", "room rent", "cap", "sub-limit", "sublimit",
-    "waiting period", "exclusion", "settlement", "bill", "invoice", "tariff",
-    # System & Governance
-    "medpass", "nhcx", "abdm", "fhir", "privacy", "anonymization", "dataset",
-    "lineage", "audit", "trace"
-]
+SYSTEM_PROMPT = """You are MedPass AI Assistant, an enterprise-grade intelligent clinical and health-insurance co-pilot.
+You assist doctors, hospital billing desks, insurance claim underwriters, and patients with:
+1. Patient encounter status, care plans, and admission details.
+2. Clinical protocols, surgical procedures, and ICD-10 diagnoses.
+3. Health insurance policies, cashless pre-authorization, room rent sub-limits, deductibles, and co-pays.
+4. Medical bill itemization, discharge readiness scoring, and resolving active blockers.
 
-# 2. Strict Off-Topic Disallowed Patterns
-OFF_TOPIC_PATTERNS = [
-    r"\b(write|create|code|debug|fix)\s+(python|javascript|java|c\+\+|html|css|script|program|app|function|loop)\b",
-    r"\b(weather|forecast|rain|temperature|sunny|cloudy|monsoon)\b",
-    r"\b(cricket|football|soccer|ipl|world cup|messi|ronaldo|nba|match score)\b",
-    r"\b(movie|cinema|actor|actress|hollywood|bollywood|netflix|song|music|album)\b",
-    r"\b(recipe|cook|bake|restaurant|dish|food recipe|curry|cake|pizza|burger)\b",
-    r"\b(politics|election|president|prime minister|parliament|bjp|congress|democrat|republican)\b",
-    r"\b(stock market|crypto|bitcoin|ethereum|forex trading|invest in stocks)\b",
-    r"\b(joke|riddle|game|gaming|playstation|xbox|video game)\b",
-    r"\b(dating|girlfriend|boyfriend|love advice|horoscope|zodiac|astrology)\b"
-]
-
-STRICT_GUARDRAIL_REFUSAL = (
-    "I am the MedPass AI Healthcare Assistant. I am strictly bounded to healthcare, "
-    "hospital workflows, clinical care plans, insurance policies, claims adjudication, "
-    "and discharge readiness. Please ask a question related to these topics."
-)
-
-SYSTEM_PROMPT = """You are MedPass AI Assistant, a concise and specialized healthcare and health-insurance assistant.
-
-YOUR BOUNDARIES AND RULES:
-1. TOPIC RESTRICTION: You ONLY answer questions strictly regarding:
-   - Medical conditions, clinical treatments, surgeries, medications, and diagnoses.
-   - Hospital admissions, bed allocation, patient care protocols, and discharge readiness.
-   - Health insurance coverage, policy clauses, room rent caps, deductibles, co-pays, and pre-authorization.
-   - Medical bill line items, claim adjudication, and discharge blockers.
-   - MedPass AI features and health data privacy.
-2. STRICT REFUSAL: If the user asks about ANYTHING outside these topics (e.g. coding, sports, weather, politics, recipes, pop culture, general trivia), you MUST decline immediately with:
-   "I am the MedPass AI Healthcare Assistant. I am strictly bounded to healthcare, hospital workflows, clinical care plans, insurance policies, claims adjudication, and discharge readiness. Please ask a question related to these topics."
-3. CONCISENESS: Answer ONLY what is necessary. Avoid lengthy fluff or speculative advice. Keep answers direct, accurate, and professional (under 3 paragraphs or crisp bullet points).
-4. CASE AWARENESS: If patient/case context is provided, use those exact figures, diagnosis, and policy parameters.
+Tone: Professional, helpful, empathetic, concise, and accurate. Format responses using clean markdown (bold text, bullet points, and key figures).
 """
 
 class ChatbotService:
-    @staticmethod
-    def is_topic_allowed(prompt: str) -> bool:
-        """
-        Determines whether the user's prompt is within the healthcare / MedPass domain.
-        """
-        p_clean = prompt.strip().lower()
-        if not p_clean:
-            return True
-
-        # Check explicit disallowed patterns first
-        for pat in OFF_TOPIC_PATTERNS:
-            if re.search(pat, p_clean):
-                return False
-
-        # If it contains any known healthcare/insurance domain term, it's allowed
-        for kw in HEALTHCARE_KEYWORDS:
-            if kw in p_clean:
-                return True
-
-        # Common conversational greetings are allowed
-        if p_clean in ["hello", "hi", "hey", "good morning", "good evening", "help", "who are you", "what can you do"]:
-            return True
-
-        # Short vague queries with no healthcare relevance are rejected
-        return False
-
     @classmethod
     def answer_query(
         cls,
         prompt: str,
         case_context: Optional[Dict[str, Any]] = None,
         custom_api_key: Optional[str] = None,
-        provider: Optional[str] = None
+        provider: Optional[str] = None,
+        db: Optional[Session] = None
     ) -> Dict[str, Any]:
         """
-        Main query handler. Enforces topic bounds, executes LLM call if API key is present,
-        or falls back to domain-bounded deterministic response engine.
+        Main query handler for MedPass AI Assistant.
+        Executes database lookups for patient/case queries, invokes Gemini if configured,
+        and falls back to a comprehensive clinical and insurance domain intelligence engine.
         """
         prompt_trimmed = prompt.strip()
+        p_lower = prompt_trimmed.lower()
 
-        # Step 1: Strict Domain Guardrail Check
-        if not cls.is_topic_allowed(prompt_trimmed):
+        # Step 1: Capabilities & Help Query Handler
+        if any(phrase in p_lower for phrase in [
+            "what can you do", "what queries can i ask", "tell me the queries",
+            "queries that i can ask", "queries i can ask", "what can i ask", "help me", "capabilities", "what are your features"
+        ]):
             return {
-                "reply": STRICT_GUARDRAIL_REFUSAL,
+                "reply": cls._get_capabilities_guide(),
                 "bounded": True,
-                "status": "OFF_TOPIC_REJECTED",
-                "provider": "guardrail"
+                "status": "SUCCESS",
+                "provider": "assistant_guide"
             }
 
-        # Step 2: Determine available API key and provider
+        # Step 2: Database Patient / Case Lookup
+        if db is not None:
+            patient_reply = cls._try_patient_case_lookup(prompt_trimmed, db)
+            if patient_reply:
+                return {
+                    "reply": patient_reply,
+                    "bounded": True,
+                    "status": "SUCCESS",
+                    "provider": "medpass_database"
+                }
+
+        # Step 3: Check Live Gemini / OpenAI if server API key is configured
         api_key = custom_api_key or settings.GEMINI_API_KEY or settings.OPENAI_API_KEY
-        active_provider = provider
+        active_provider = provider or ("gemini" if settings.GEMINI_API_KEY else ("openai" if settings.OPENAI_API_KEY else None))
 
-        if not active_provider:
-            if custom_api_key:
-                active_provider = "openai" if custom_api_key.startswith("sk-") else "gemini"
-            elif settings.GEMINI_API_KEY:
-                active_provider = "gemini"
-            elif settings.OPENAI_API_KEY:
-                active_provider = "openai"
-
-        # Prepare context string if a case is active
         context_str = ""
         if case_context:
             context_str = (
                 f"\nACTIVE CASE CONTEXT:\n"
-                f"- Case Number: {case_context.get('case_number', 'N/A')}\n"
-                f"- Patient: {case_context.get('patient_name', 'N/A')}\n"
-                f"- Diagnosis: {case_context.get('diagnosis', 'N/A')}\n"
-                f"- Status: {case_context.get('status', 'N/A')}\n"
-                f"- Readiness Score: {case_context.get('readiness_score', 'N/A')}%\n"
-                f"- Active Blockers: {case_context.get('blockers_summary', 'None')}\n"
-                f"- Total Billed: ₹{case_context.get('total_gross', 0):,.2f}\n"
-                f"- Covered: ₹{case_context.get('total_covered', 0):,.2f}\n"
-                f"- Patient Payable: ₹{case_context.get('total_patient_payable', 0):,.2f}\n"
+                f"- Case Number: {case_context.get("case_number", "N/A")}\n"
+                f"- Patient: {case_context.get("patient_name", "N/A")}\n"
+                f"- Diagnosis: {case_context.get("diagnosis", "N/A")}\n"
+                f"- Status: {case_context.get("status", "N/A")}\n"
+                f"- Readiness Score: {case_context.get("readiness_score", "N/A")}%\n"
+                f"- Active Blockers: {case_context.get("blockers_summary", "None")}\n"
+                f"- Total Billed: ₹{case_context.get("total_gross", 0):,.2f}\n"
+                f"- Covered: ₹{case_context.get("total_covered", 0):,.2f}\n"
+                f"- Patient Payable: ₹{case_context.get("total_patient_payable", 0):,.2f}\n"
             )
 
-        # Step 3: Try Live LLM (Gemini or OpenAI) if API key is present
         if api_key and active_provider == "gemini":
             try:
                 reply = cls._call_gemini(prompt_trimmed, context_str, api_key)
@@ -155,7 +91,7 @@ class ChatbotService:
                         "provider": "gemini"
                     }
             except Exception as e:
-                logger.warning(f"Gemini call failed: {e}. Falling back to deterministic engine.")
+                logger.warning(f"Gemini call error ({e}). Proceeding to clinical engine.")
 
         elif api_key and active_provider == "openai":
             try:
@@ -168,20 +104,259 @@ class ChatbotService:
                         "provider": "openai"
                     }
             except Exception as e:
-                logger.warning(f"OpenAI call failed: {e}. Falling back to deterministic engine.")
+                logger.warning(f"OpenAI call error ({e}). Proceeding to clinical engine.")
 
-        # Step 4: Deterministic Domain-Bounded Response Engine (Zero External Dependency Fallback)
-        reply = cls._deterministic_bounded_answer(prompt_trimmed, case_context)
+        # Step 4: Comprehensive Domain Intelligence Engine
+        reply = cls._domain_intelligence_answer(prompt_trimmed, case_context, db)
         return {
             "reply": reply,
             "bounded": True,
             "status": "SUCCESS",
-            "provider": "deterministic_engine"
+            "provider": "medpass_clinical_engine"
         }
 
     @classmethod
+    def _try_patient_case_lookup(cls, prompt: str, db: Session) -> Optional[str]:
+        """
+        Attempts to identify patient names or case numbers in the prompt and retrieve live records.
+        """
+        p_clean = prompt.strip()
+        p_lower = p_clean.lower()
+
+        stop_words = {
+            "fetch", "details", "of", "the", "search", "patient", "show", "me",
+            "find", "who", "is", "about", "get", "status", "case", "record", "info",
+            "information", "please", "can", "you", "check", "for", "look", "up", "a", "an"
+        }
+
+        # 1. Match Case Numbers directly: e.g. MED-2026-..., CASE-...
+        case_match = re.search(r"\b(MED-[A-Za-z0-9\-]+|CASE-[A-Za-z0-9\-]+)\b", p_clean, re.IGNORECASE)
+        if case_match:
+            case_no = case_match.group(1).upper()
+            c = db.query(Case).filter(Case.case_number.ilike(f"%{case_no}%")).first()
+            if c:
+                return cls._format_case_card(c)
+
+        # 2. Extract potential names/tokens
+        words = re.findall(r"[A-Za-z0-9\-]+", p_clean)
+        candidate_terms = [w for w in words if w.lower() not in stop_words and len(w) >= 3]
+
+        for term in candidate_terms:
+            patient = db.query(Patient).filter(
+                (Patient.full_name.ilike(f"%{term}%")) | (Patient.patient_ref.ilike(f"%{term}%"))
+            ).first()
+
+            if patient:
+                case = db.query(Case).filter(Case.patient_id == patient.id).order_by(Case.created_at.desc()).first()
+                return cls._format_patient_card(patient, case)
+
+        return None
+
+    @staticmethod
+    def _format_patient_card(patient: Patient, case: Optional[Case]) -> str:
+        lines = [
+            f"### 👤 Patient Record: **{patient.full_name}**",
+            f"• **Patient ID**: `{patient.patient_ref}`",
+            f"• **Demographics**: {patient.age_band} yrs • {patient.sex_at_birth.title()} • {patient.phone or "Phone not recorded"}"
+        ]
+
+        if case:
+            hosp_name = case.hospital.name if case.hospital else "Apollo Multi-Specialty Hospital"
+            total_gross = sum([float(i.gross_amount) for i in (case.line_items or [])])
+            total_covered = sum([float(d.covered_amount) for d in (case.decisions or [])])
+            total_payable = sum([float(d.patient_payable) for d in (case.decisions or [])])
+
+            lines.extend([
+                "",
+                f"**🏥 Active Admission Details:**",
+                f"• **Case Number**: `{case.case_number}`",
+                f"• **Hospital**: {hosp_name}",
+                f"• **Primary Diagnosis**: {case.primary_diagnosis_name} (`{case.primary_diagnosis_code}`)",
+                f"• **Encounter Status**: `{case.case_status}`",
+                f"• **Discharge Readiness**: **{case.readiness_score}%** ({case.readiness_band})",
+                "",
+                f"**💰 Financial & Settlement Ledger:**",
+                f"• **Total Billed Gross**: ₹{total_gross:,.2f}",
+                f"• **Insurer Approved**: ₹{total_covered:,.2f}",
+                f"• **Patient Out-of-Pocket**: ₹{total_payable:,.2f}",
+            ])
+
+            unresolved_blockers = [b for b in (case.blockers or []) if not b.is_resolved]
+            if unresolved_blockers:
+                lines.append("")
+                lines.append(f"**⚠️ Active Discharge Blockers ({len(unresolved_blockers)}):**")
+                for b in unresolved_blockers:
+                    lines.append(f"• **[{b.severity}]** {b.blocker_type}: {b.description} *(Action: {b.action_required})*")
+            else:
+                lines.append("")
+                lines.append("• **Blocker Status**: ✓ No active discharge blockers. All criteria satisfied.")
+        else:
+            lines.append("\n*No active inpatient admissions currently associated with this patient file.*")
+
+        return "\n".join(lines)
+
+    @staticmethod
+    def _format_case_card(case: Case) -> str:
+        patient_name = case.patient.full_name if case.patient else "Patient Record"
+        hosp_name = case.hospital.name if case.hospital else "MedPass Network Hospital"
+        total_gross = sum([float(i.gross_amount) for i in (case.line_items or [])])
+        total_covered = sum([float(d.covered_amount) for d in (case.decisions or [])])
+        total_payable = sum([float(d.patient_payable) for d in (case.decisions or [])])
+
+        lines = [
+            f"### 📋 Case File: **{case.case_number}**",
+            f"• **Patient**: {patient_name}",
+            f"• **Hospital**: {hosp_name}",
+            f"• **Diagnosis**: {case.primary_diagnosis_name} (`{case.primary_diagnosis_code}`)",
+            f"• **Status**: `{case.case_status}`",
+            f"• **Readiness Score**: **{case.readiness_score}%** ({case.readiness_band})",
+            "",
+            f"**Financial Breakdown:**",
+            f"• **Gross Charges**: ₹{total_gross:,.2f}",
+            f"• **Insurer Covered**: ₹{total_covered:,.2f}",
+            f"• **Patient Share**: ₹{total_payable:,.2f}",
+        ]
+
+        unresolved = [b for b in (case.blockers or []) if not b.is_resolved]
+        if unresolved:
+            lines.append("")
+            lines.append(f"**Active Blockers ({len(unresolved)}):**")
+            for b in unresolved:
+                lines.append(f"• **[{b.severity}]** {b.description} *(Action: {b.action_required})*")
+
+        return "\n".join(lines)
+
+    @staticmethod
+    def _get_capabilities_guide() -> str:
+        return (
+            "### 🩺 What You Can Ask Me\n\n"
+            "I can assist across all operational, clinical, and insurance workflows. Here are sample queries:\n\n"
+            "1. **👤 Patient & Case Lookups**\n"
+            "   • *\"Fetch Rahul details\"* or *\"Search patient Tanvi\"*\n"
+            "   • *\"What is the status of case MED-2026-2003?\"*\n"
+            "   • *\"Show clinical summary for patient Ishita\"*\n\n"
+            "2. **🛡️ Health Insurance & Policy Rules**\n"
+            "   • *\"Explain the room rent deduction rule\"*\n"
+            "   • *\"How does 10% co-pay apply on ₹1.5L surgery bill?\"*\n"
+            "   • *\"What are the IRDAI cashless pre-authorization SLAs?\"*\n\n"
+            "3. **📋 Clinical Care Pathways**\n"
+            "   • *\"Appendicitis protocol and ICD-10 code\"*\n"
+            "   • *\"Cataract surgery daycare guidelines\"*\n"
+            "   • *\"Pre-operative checkup checklist\"*\n\n"
+            "4. **⚡ Discharge Readiness & Blockers**\n"
+            "   • *\"What blockers are preventing discharge?\"*\n"
+            "   • *\"How do I resolve an outstanding co-pay blocker?\"*\n"
+            "   • *\"Why is the readiness score below 80%?\"*\n\n"
+            "5. **🏥 Hospital & Network Operations**\n"
+            "   • *\"Check Apollo hospital network integration\"*\n"
+            "   • *\"Cashless Everywhere protocol guidelines\"*"
+        )
+
+    @classmethod
+    def _domain_intelligence_answer(
+        cls,
+        prompt: str,
+        case_context: Optional[Dict[str, Any]],
+        db: Optional[Session]
+    ) -> str:
+        p = prompt.lower()
+
+        # 1. Greetings
+        if any(w in p for w in ["hello", "hi", "hey", "good morning", "good evening", "greetings"]):
+            return (
+                "Hello! I am your **MedPass AI Clinical & Insurance Assistant**.\n\n"
+                "I am ready to help you with:\n"
+                "• **Patient Search & Case Records**: Try asking *\"Fetch Rahul details\"* or *\"Search patient Tanvi\"*\n"
+                "• **Insurance Adjudication**: Room rent deductions, co-pay calculations, and pre-auths\n"
+                "• **Discharge Readiness**: Diagnoses, line-item itemization, and blocker clearance\n\n"
+                "How can I assist you with your active case or query?"
+            )
+
+        # 2. Discharge Blockers
+        if any(w in p for w in ["blocker", "blocked", "stuck", "prevent discharge", "why pending", "readiness"]):
+            if case_context:
+                blockers = case_context.get("blockers", [])
+                if blockers:
+                    b_list = "\n".join([f"• **[{b.get("severity", "HIGH")}]** {b.get("type")}: {b.get("description")}\n  *(Remediation: {b.get("action_required", "Resolve")})*" for b in blockers])
+                    return f"### ⚠️ Active Discharge Blockers (Case {case_context.get("case_number")}):\n\n{b_list}\n\n**Current Readiness Score**: **{case_context.get("readiness_score")}%**"
+                return f"✓ **Case {case_context.get("case_number")}** has zero active discharge blockers. Readiness score is **{case_context.get("readiness_score")}%** (Discharge Cleared)."
+            return (
+                "### ⚡ Discharge Blocker Framework\n\n"
+                "Common discharge blockers governed by MedPass AI:\n"
+                "1. **`OUTSTANDING_PATIENT_COPAY`**: Co-pay settlement pending at the billing desk.\n"
+                "2. **`MISSING_DISCHARGE_SUMMARY`**: Doctor final clinical summary not yet signed.\n"
+                "3. **`FINAL_INSURER_APPROVAL_PENDING`**: Final cashless settlement awaiting underwriter approval.\n\n"
+                "*Select an active patient case or ask for a patient name to inspect specific case blockers.*"
+            )
+
+        # 3. Room Rent & Policy Deductions
+        if any(w in p for w in ["room rent", "room cap", "deductible", "copay", "co-pay", "proportionate", "deduction"]):
+            if case_context and case_context.get("total_gross"):
+                return (
+                    f"### 💰 Financial Breakdown for Case {case_context.get("case_number")}:\n"
+                    f"• **Total Gross Billed**: ₹{case_context.get("total_gross"):,.2f}\n"
+                    f"• **Insurer Covered**: ₹{case_context.get("total_covered"):,.2f}\n"
+                    f"• **Patient Payable**: ₹{case_context.get("total_patient_payable"):,.2f}\n\n"
+                    f"**Clause 3.2 Room Rent Rule**:\n"
+                    f"If the chosen room rent exceeds the policy cap (e.g. ₹5,000/day for Normal, ₹10,000/day for ICU), "
+                    f"associated charges such as doctor rounds, nursing, and OT fee are reduced proportionately. The difference is borne by the patient."
+                )
+            return (
+                "### 🛡️ Room Rent & Proportionate Deduction Rule\n\n"
+                "Under standard IRDAI health insurance guidelines:\n"
+                "• **Normal Room Cap**: Typically 1% of Sum Insured per day (e.g., ₹5,000/day on a ₹5 Lakh policy).\n"
+                "• **ICU Cap**: Typically 2% of Sum Insured per day (e.g., ₹10,000/day).\n"
+                "• **Proportionate Deduction Formula**:\n"
+                "  $$\\text{Approved Ratio} = \\frac{\\text{Eligible Room Rent}}{\\text{Actual Room Rent Charged}}$$\n"
+                "Associated medical charges (surgery fees, nursing, anesthetist) are reimbursed at this ratio, and the patient pays the remainder."
+            )
+
+        # 4. Pre-Auth & Cashless Claims
+        if any(w in p for w in ["preauth", "pre-auth", "cashless", "claim", "adjudication", "sla", "approval"]):
+            if case_context:
+                return (
+                    f"### 📋 Cashless Pre-Auth Summary (Case {case_context.get("case_number")}):\n"
+                    f"• **Patient**: {case_context.get("patient_name")}\n"
+                    f"• **Diagnosis**: {case_context.get("diagnosis")}\n"
+                    f"• **Authorization Status**: `{case_context.get("status")}`\n"
+                    f"• **Readiness Score**: **{case_context.get("readiness_score")}%**\n"
+                    f"All line items have been mapped against the insurer policy tariff."
+                )
+            return (
+                "### ⚡ IRDAI Cashless Everywhere Pre-Authorization Protocol\n\n"
+                "1. **Initial Pre-Auth (45-Minute SLA)**: Hospital desk submits estimated costs, clinical diagnosis, and doctor notes via NHCX FHIR R4 standard.\n"
+                "2. **Adjudication**: Insurer system verifies active sum insured, excludes non-payables, and issues initial pre-authorization token.\n"
+                "3. **Final Discharge (3-Hour SLA)**: Final itemized bill is submitted on discharge day. Pre-auth is adjusted to final approved cashless amount."
+            )
+
+        # 5. Clinical Protocols (Appendicitis, Cataract, Cholecystitis, etc.)
+        if any(w in p for w in ["appendicitis", "cataract", "cholecystitis", "surgery", "laparoscopic", "protocol", "icd"]):
+            return (
+                "### 🩺 Clinical Protocol Reference\n\n"
+                "• **Acute Appendicitis (`K35.80`)**: Laparoscopic Appendectomy. Standard stay: 2-3 inpatient days. Typical package includes pre-op blood panel, abdominal ultrasound/CT, surgical OT consumables, and postoperative IV antibiotics.\n"
+                "• **Cataract (`H26.9`)**: Daycare Phacoemulsification with intraocular lens (IOL) implantation. Outpatient/Daycare procedure with pre-op biometry.\n"
+                "• **Acute Cholecystitis (`K81.0`)**: Laparoscopic Cholecystectomy. Standard stay: 2-4 days with liver function tests (LFT) and surgical OT package."
+            )
+
+        # 6. Fallback General Healthcare Response
+        if case_context:
+            return (
+                f"### 📋 Context for Case {case_context.get("case_number")}\n"
+                f"• **Patient**: {case_context.get("patient_name")}\n"
+                f"• **Diagnosis**: {case_context.get("diagnosis")}\n"
+                f"• **Current Status**: `{case_context.get("status")}` ({case_context.get("readiness_score")}% readiness)\n\n"
+                f"You can ask me to check discharge blockers, explain room rent rules, or calculate patient co-pay shares."
+            )
+
+        return (
+            "I am your **MedPass AI Clinical & Insurance Assistant**.\n\n"
+            "You can query active patient records (*e.g., \"Fetch Rahul details\"*), check discharge readiness, "
+            "review insurance coverage rules, or ask about hospital clinical care pathways. "
+            "Type *\"what queries can I ask\"* for a complete guide."
+        )
+
+    @classmethod
     def get_ai_status(cls) -> Dict[str, Any]:
-        """Returns server-side status of AI integrations without exposing secrets."""
         has_gemini = bool(settings.GEMINI_API_KEY)
         has_openai = bool(settings.OPENAI_API_KEY)
         engine_mode = "gemini_server_side" if has_gemini else ("openai_server_side" if has_openai else "deterministic_clinical_fallback")
@@ -189,26 +364,17 @@ class ChatbotService:
             "gemini_active": has_gemini,
             "openai_active": has_openai,
             "engine_mode": engine_mode,
-            "topic_boundary": "STRICT_HEALTHCARE_CLAIMS_ONLY",
             "server_side_secured": True,
-            "message": "Connected to MedPass AI Gemini Engine (Secure Server-Side)" if has_gemini else "MedPass AI Clinical Engine Active (Deterministic Domain Guarded)"
+            "message": "Connected to MedPass AI Gemini Engine" if has_gemini else "MedPass AI Clinical Engine Active"
         }
 
     @staticmethod
     def _call_gemini(prompt: str, context: str, api_key: str) -> str:
-        """Calls Google Gemini REST API using httpx."""
         url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
         user_content = f"{SYSTEM_PROMPT}\n{context}\nUser Query: {prompt}"
         payload = {
-            "contents": [
-                {
-                    "parts": [{"text": user_content}]
-                }
-            ],
-            "generationConfig": {
-                "temperature": 0.2,
-                "maxOutputTokens": 600
-            }
+            "contents": [{"parts": [{"text": user_content}]}],
+            "generationConfig": {"temperature": 0.2, "maxOutputTokens": 600}
         }
         with httpx.Client(timeout=15.0) as client:
             resp = client.post(url, json=payload)
@@ -219,26 +385,17 @@ class ChatbotService:
                     parts = candidates[0].get("content", {}).get("parts", [])
                     if parts:
                         return parts[0].get("text", "").strip()
-            raise RuntimeError(f"Gemini API returned HTTP {resp.status_code}: {resp.text}")
+            raise RuntimeError(f"Gemini API returned HTTP {resp.status_code}")
 
     @staticmethod
     def _call_openai(prompt: str, context: str, api_key: str) -> str:
-        """Calls OpenAI Chat Completion REST API using httpx."""
         url = "https://api.openai.com/v1/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
-        }
+        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT + (f"\n{context}" if context else "")},
             {"role": "user", "content": prompt}
         ]
-        payload = {
-            "model": "gpt-4o-mini",
-            "messages": messages,
-            "temperature": 0.2,
-            "max_tokens": 600
-        }
+        payload = {"model": "gpt-4o-mini", "messages": messages, "temperature": 0.2, "max_tokens": 600}
         with httpx.Client(timeout=15.0) as client:
             resp = client.post(url, headers=headers, json=payload)
             if resp.status_code == 200:
@@ -246,90 +403,4 @@ class ChatbotService:
                 choices = data.get("choices", [])
                 if choices:
                     return choices[0].get("message", {}).get("content", "").strip()
-            raise RuntimeError(f"OpenAI API returned HTTP {resp.status_code}: {resp.text}")
-
-    @staticmethod
-    def _deterministic_bounded_answer(prompt: str, case_context: Optional[Dict[str, Any]]) -> str:
-        """
-        High-precision deterministic answers for healthcare and insurance queries.
-        Used offline or when external LLM keys are unconfigured.
-        """
-        p = prompt.lower()
-
-        # 1. Greetings
-        if any(w in p for w in ["hello", "hi", "hey", "who are you", "what can you do", "help"]):
-            return (
-                "Hello! I am MedPass AI Assistant. I can assist you with:\n"
-                "• Hospital admissions, bed allocation, and patient care protocols\n"
-                "• Diagnosis and clinical treatment verification (ICD-10 codes)\n"
-                "• Health insurance coverage breakdown, room rent caps, and deductibles\n"
-                "• Discharge readiness scoring and resolving discharge blockers\n\n"
-                "How can I help you with your active case or policy query?"
-            )
-
-        # 2. Blockers
-        if any(w in p for w in ["blocker", "blocked", "stuck", "prevent discharge", "why pending"]):
-            if case_context:
-                blockers = case_context.get("blockers", [])
-                if blockers:
-                    b_list = "\n".join([f"• [{b.get('severity', 'HIGH')}] {b.get('type')}: {b.get('description')} (Action: {b.get('action_required', 'Resolve')})" for b in blockers])
-                    return f"Active Discharge Blockers for Case {case_context.get('case_number')}:\n{b_list}"
-                return f"Case {case_context.get('case_number')} has no active blockers. Current readiness score is {case_context.get('readiness_score')}%, ready for discharge."
-            return "Please select an active patient case to view its specific discharge blockers and recommended remediation actions."
-
-        # 3. Room Rent & Policy Deductions
-        if any(w in p for w in ["room", "cap", "deductible", "copay", "co-pay", "payable", "deduction"]):
-            if case_context and case_context.get("total_gross"):
-                return (
-                    f"Financial Breakdown for Case {case_context.get('case_number')}:\n"
-                    f"• Total Gross Billed: ₹{case_context.get('total_gross'):,.2f}\n"
-                    f"• Insurer Covered: ₹{case_context.get('total_covered'):,.2f}\n"
-                    f"• Patient Payable: ₹{case_context.get('total_patient_payable'):,.2f}\n\n"
-                    f"Clause 3.2 Room Rent Rule: Daily room rent exceeding policy sub-limit is patient-payable along with proportionate deduction. Co-pay applies per policy terms."
-                )
-            return (
-                "Policy Room Rent Rules:\n"
-                "Under standard health policies, room rent is capped (typically 1% of Sum Insured for normal room or 2% for ICU per day). "
-                "Any tariff above this cap triggers proportionate deductions on associated surgical and nursing charges, which must be paid by the patient."
-            )
-
-        # 4. Coverage and Pre-Auth
-        if any(w in p for w in ["coverage", "preauth", "pre-auth", "claim", "adjudication", "cashless"]):
-            if case_context:
-                return (
-                    f"Coverage Summary for Case {case_context.get('case_number')}:\n"
-                    f"• Patient: {case_context.get('patient_name')}\n"
-                    f"• Diagnosis: {case_context.get('diagnosis')}\n"
-                    f"• Readiness Score: {case_context.get('readiness_score')}%\n"
-                    f"• Authorization Status: {case_context.get('status')}\n"
-                    f"• Line Items Approved: Billed treatments have been evaluated under the policy tariff."
-                )
-            return (
-                "Cashless Pre-Authorization:\n"
-                "Pre-authorizations are verified against the patient's policy active sum insured, waiting periods for specific illnesses, "
-                "and hospital network status. Once verified, initial authorization is issued within the IRDAI 45-minute SLA."
-            )
-
-        # 5. Clinical treatment and diseases
-        if any(w in p for w in ["appendicitis", "surgery", "laparoscopic", "cholecystitis", "treatment", "procedure", "medicine"]):
-            return (
-                "Clinical Protocol Summary:\n"
-                "• Appendicitis (ICD-10: K35.80): Standard treatment is Laparoscopic Appendectomy with 2-3 days inpatient stay, pre-op panels, and IV antibiotic coverage.\n"
-                "• Cholecystitis (ICD-10: K81.0): Laparoscopic Cholecystectomy with ultrasound imaging and liver panel tests.\n"
-                "All procedures are itemized into room rent, OT surgical fee, pharmacy, and diagnostics."
-            )
-
-        # 6. Default Healthcare Response
-        if case_context:
-            return (
-                f"Case {case_context.get('case_number')} ({case_context.get('patient_name')}):\n"
-                f"• Diagnosis: {case_context.get('diagnosis')}\n"
-                f"• Status: {case_context.get('status')}\n"
-                f"• Readiness: {case_context.get('readiness_score')}%\n"
-                f"You can ask me about discharge blockers, coverage calculations, or room rent deductions."
-            )
-
-        return (
-            "I am ready to assist with healthcare, hospital admissions, clinical treatments, insurance policies, "
-            "and discharge workflows. Please specify your question or select an active case."
-        )
+            raise RuntimeError(f"OpenAI API returned HTTP {resp.status_code}")
