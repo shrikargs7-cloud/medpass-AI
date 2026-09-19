@@ -47,27 +47,37 @@ In addition to operational workflows, the platform includes **Trace Commons**—
 
 ## 🏗 System Architecture
 
-```text
-                          ┌────────────────────────────────────────────────────────┐
-                          │         React + TypeScript + Tailwind + Lucide         │
-                          │   (Hospital, Insurer, Patient, Admin & Trace Portals)  │
-                          └───────────────────────────┬────────────────────────────┘
-                                                      │ REST API
-                                                      ▼
-┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
-│                                FastAPI Modular Backend Service                                   │
-├─────────────────────────────────────────┬────────────────────────────────────────────────────────┤
-│ MedPass AI Core:                        │ Trace Commons Data Layer:                              │
-│ • Document Intelligence (OCR/LLM)       │ • Transactional Event Outbox & Ingestion               │
-│ • Deterministic Policy Engine           │ • Privacy De-identification Gate (Presidio/Regex/Mask) │
-│ • Financial Waterfall Calculator        │ • Data Quality Rules Engine (Completeness/Integrity)   │
-│ • Case Readiness & Blocker Engine       │ • Dataset Catalog & Versioning                         │
-│ • Decision & Audit Evidence Engine      │ • DuckDB Cohort Query & Parquet/CSV Export Engine      │
-└───────────────────────────┬──────────────────────────────────────────┬───────────────────────────┘
-                            ▼                                          ▼
-                PostgreSQL / SQLite DB                        DuckDB & Parquet Engine
-           (Operational `app` & `trace` schemas)               (Longitudinal Analytics)
-```
+![System Architecture](docs/architecture.jpg)
+
+---
+
+## 🛠 Technology Stack
+
+A modular, API-first stack for insurance authorization, discharge intelligence, and governed healthcare data.
+
+| Layer | Technology | Purpose in MedPass AI | Role |
+|---|---|---|---|
+| **Frontend** | React + TypeScript | Role-based stakeholder dashboards | Hospital • Insurer/TPA • Patient • Trace Commons |
+| **UI System** | Tailwind CSS + shadcn/ui | Consistent, accessible interface components | Reusable cards, tables, dialogs and workflow UI |
+| **Visualization** | Recharts / ECharts | Operational and Trace analytics | Case funnel, readiness, cohort and trend views |
+| **Backend API** | FastAPI + Python | REST APIs and domain orchestration | Cases, claims, documents, Trace, integrations |
+| **ORM / Data Access** | SQLAlchemy | Typed persistence and domain data access | Operational schema + Trace schema |
+| **Operational DB** | PostgreSQL (Supabase) | System of record for operational workflows | Cases, policies, claims, documents, audit and organizations |
+| **Auth & Access** | Supabase Auth + JWT / RLS | Authentication and tenant-aware access control | Target production security model |
+| **Policy & Decision** | Deterministic Python engines | Coverage, calculation, decision and readiness logic | Rules first; evidence-backed explanations |
+| **Document Intelligence** | OCR + LLM assistance | Extract structured fields from medical/insurance documents | LLM assists ambiguity/extraction; not the authoritative decision maker |
+| **Event Layer** | Transactional Outbox | Reliable domain-event capture | Admission → diagnosis → treatment → authorization → discharge → outcome |
+| **Data Layer** | Canonical schema | Governed longitudinal healthcare representation | Privacy-preserving subject/facility/encounter and clinical/workflow domains |
+| **Privacy** | Presidio + deterministic rules | PII detection, de-identification and policy gates | Fail-closed publication gate; configurable governance |
+| **Analytics / Export** | DuckDB + Parquet | Cohort queries and efficient dataset exports | Timeline, hospital and cohort-based selection |
+| **Interoperability** | FHIR + OMOP adapters | Exchange and research-standard representations | FHIR for interoperability; OMOP for research analytics |
+| **Data Quality** | Validation framework | Completeness, temporal and referential checks | Quality report attached to dataset versions |
+| **Lineage / Provenance**| OpenLineage-compatible model| Transformation and dataset provenance | Track source → transformation → published version |
+| **Mock Integrations** | Beeceptor | Simulate payer/external APIs | Hackathon-friendly integration testing |
+| **Workflow Automation** | n8n (optional) | Non-core workflow automation | Use only where automation adds value |
+| **Container / Runtime** | Docker | Reproducible application packaging | Backend/frontend deployment consistency |
+| **CI/CD** | GitHub Actions | Automated build, test and deployment checks | Quality gate for every change |
+| **Deployment** | Render / Vercel | Host web apps, APIs and database | Cloud deployment path for MVP/demo |
 
 ---
 
