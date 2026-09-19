@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, File, UploadFile
 from sqlalchemy.orm import Session
 
 from backend.app.db import get_db
@@ -607,3 +607,80 @@ def get_available_hospitals(db: Session = Depends(get_db)):
     return [{"id": h.id, "name": h.name, "hospital_tier": h.hospital_tier} for h in hospitals]
 
 
+
+@router.post("/intake/extract")
+async def extract_intake_document(
+    file: UploadFile = File(...)
+):
+    """Parses an uploaded admission/bill document and returns structured intake data."""
+    bytes_data = await file.read()
+    filename = file.filename or "uploaded.bin"
+    fn_lower = filename.lower()
+    
+    content_text = ""
+    if fn_lower.endswith(".pdf"):
+        try:
+            import pypdf
+            from io import BytesIO
+            reader = pypdf.PdfReader(BytesIO(bytes_data))
+            pages = [p.extract_text() or "" for p in reader.pages]
+            content_text = "\n".join(pages).strip()
+        except Exception:
+            content_text = ""
+    elif fn_lower.endswith(".docx"):
+        try:
+            import docx
+            from io import BytesIO
+            doc_obj = docx.Document(BytesIO(bytes_data))
+            content_text = "\n".join([p.text for p in doc_obj.paragraphs if p.text]).strip()
+        except Exception:
+            content_text = ""
+    else:
+        try:
+            content_text = bytes_data.decode("utf-8")
+        except Exception:
+            pass
+
+    from backend.app.services.llm_client import LLMDocumentIntelligenceService
+    extracted = LLMDocumentIntelligenceService.extract_document_data(
+        content_text, "BILL_INVOICE",
+        image_bytes=bytes_data if fn_lower.endswith((".jpg", ".jpeg", ".png", ".pdf")) else None,
+        mime_type=file.content_type
+    )
+    return {"extracted_data": extracted}
+
+@router.post("/aux/policies/extract")
+async def extract_policy_document(
+    file: UploadFile = File(...)
+):
+    """Parses an uploaded policy document and returns structured policy limits and rules."""
+    bytes_data = await file.read()
+    filename = file.filename or "uploaded.bin"
+    fn_lower = filename.lower()
+    
+    content_text = ""
+    if fn_lower.endswith(".pdf"):
+        try:
+            import pypdf
+            from io import BytesIO
+            reader = pypdf.PdfReader(BytesIO(bytes_data))
+            pages = [p.extract_text() or "" for p in reader.pages]
+            content_text = "\n".join(pages).strip()
+        except Exception:
+            content_text = ""
+    elif fn_lower.endswith(".docx"):
+        try:
+            import docx
+            from io import BytesIO
+            doc_obj = docx.Document(BytesIO(bytes_data))
+            content_text = "\n".join([p.text for p in doc_obj.paragraphs if p.text]).strip()
+        except Exception:
+            pass
+
+    from backend.app.services.llm_client import LLMDocumentIntelligenceService
+    extracted = LLMDocumentIntelligenceService.extract_document_data(
+        content_text, "POLICY_DOCUMENT",
+        image_bytes=bytes_data if fn_lower.endswith((".jpg", ".jpeg", ".png", ".pdf")) else None,
+        mime_type=file.content_type
+    )
+    return {"extracted_data": extracted}

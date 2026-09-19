@@ -38,26 +38,24 @@ class LLMDocumentIntelligenceService:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={settings.GEMINI_API_KEY}"
         system_instruction = (
             "You are a clinical and medical billing data extraction expert. "
-            "Analyze the medical bill, discharge summary, or report. "
-            "Extract the patient name, diagnosis, ICD-10 code, and every single itemized charge. "
-            "Categorize each item as one of: ROOM_RENT, ICU, SURGERY, INVESTIGATION, PHARMACY, CONSULTATION. "
-            "Return ONLY valid JSON with this schema:\n"
-            "{\n"
-            '  "patient_name": "string or null",\n'
-            '  "diagnosis_name": "string",\n'
-            '  "diagnosis_code": "ICD-10 code",\n'
-            '  "line_items": [\n'
-            '    {\n'
-            '      "category": "ROOM_RENT|ICU|SURGERY|INVESTIGATION|PHARMACY|CONSULTATION",\n'
-            '      "code": "e.g. DIAG-101 or SURG-201",\n'
-            '      "description": "Item description",\n'
-            '      "quantity": float,\n'
-            '      "unit_amount": float,\n'
-            '      "gross_amount": float\n'
-            "    }\n"
-            "  ],\n"
-            '  "confidence": 0.98\n'
-            "}"
+            "Extract structured data from the document text or image.\n"
+            f"Document Type: {doc_type}\n\n"
+            "If Document Type is BILL_INVOICE or ESTIMATE or LAB_REPORT or DISCHARGE_SUMMARY:\n"
+            "- patient_name (string)\n"
+            "- dob (string YYYY-MM-DD)\n"
+            "- gender (MALE/FEMALE)\n"
+            "- diagnosis_name (string)\n"
+            "- diagnosis_code (string, ICD-10 or snomed)\n"
+            "- policy_number (string)\n"
+            "- line_items: array of objects with fields: category (ROOM_RENT, ICU, SURGERY, INVESTIGATION, PHARMACY, CONSULTATION, OTHER), code (string), description (string), quantity (number), unit_amount (number), gross_amount (number).\n\n"
+            "If Document Type is POLICY_DOCUMENT:\n"
+            "- policy_number (string)\n"
+            "- plan_name (string)\n"
+            "- sum_insured (number)\n"
+            "- deductible (number)\n"
+            "- co_pay_pct (number)\n"
+            "- exclusions: array of strings (e.g. ['CONSUMABLES', 'COSMETIC', 'DENTAL'])\n\n"
+            "Respond ONLY with valid JSON matching the schema described. Do not use markdown wrappers."
         )
 
         parts: List[Dict[str, Any]] = []
@@ -93,7 +91,7 @@ class LLMDocumentIntelligenceService:
                     cleaned = re.sub(r"^```json\s*", "", candidate_text.strip())
                     cleaned = re.sub(r"```$", "", cleaned.strip())
                     parsed = json.loads(cleaned)
-                    if isinstance(parsed, dict) and "line_items" in parsed:
+                    if isinstance(parsed, dict):
                         parsed["document_type"] = doc_type
                         parsed["extractor"] = "gemini-1.5-flash"
                         return parsed

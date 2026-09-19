@@ -345,7 +345,92 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
     }
   };
 
+
+  const handleAutofillCase = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || !e.target.files[0]) return;
+    const file = e.target.files[0];
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+      notify("Extracting document data with AI... Please wait.");
+      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/cases/intake/extract`, {
+        method: 'POST',
+        body: formData
+      });
+      if (!res.ok) throw new Error("Failed to extract data");
+      const data = await res.json();
+      const extracted = data.extracted_data;
+      
+      setNewCaseForm(prev => ({
+        ...prev,
+        full_name: extracted.patient_name || prev.full_name,
+        dob: extracted.dob || prev.dob,
+        sex_at_birth: extracted.gender || prev.sex_at_birth,
+        policy_id: extracted.policy_number || prev.policy_id,
+        primary_diagnosis_code: extracted.diagnosis_code || prev.primary_diagnosis_code,
+        primary_diagnosis_name: extracted.diagnosis_name || prev.primary_diagnosis_name,
+      }));
+
+      if (extracted.line_items && extracted.line_items.length > 0) {
+        setTreatmentItems(extracted.line_items.map((it: any, idx: number) => ({
+          id: `item-${Date.now()}-${idx}`,
+          category: it.category || 'INVESTIGATION',
+          code: it.code || `ITEM-${idx}`,
+          description: it.description || '',
+          quantity: it.quantity || 1,
+          unit_amount: it.unit_amount || 0
+        })));
+      }
+      notify("Autofill complete!");
+    } catch (err: any) {
+      alert("Autofill failed: " + err.message);
+    }
+  };
+
+
+  const handleAutofillCase = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || !e.target.files[0]) return;
+    const file = e.target.files[0];
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+      // notify("Extracting document data with AI...");
+      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/cases/intake/extract`, {
+        method: 'POST',
+        body: formData
+      });
+      if (!res.ok) throw new Error("Failed to extract data");
+      const data = await res.json();
+      const extracted = data.extracted_data;
+      
+      setNewCaseForm(prev => ({
+        ...prev,
+        full_name: extracted.patient_name || prev.full_name,
+        dob: extracted.dob || prev.dob,
+        sex_at_birth: extracted.gender || prev.sex_at_birth,
+        policy_id: extracted.policy_number || prev.policy_id,
+        primary_diagnosis_code: extracted.diagnosis_code || prev.primary_diagnosis_code,
+        primary_diagnosis_name: extracted.diagnosis_name || prev.primary_diagnosis_name,
+      }));
+
+      if (extracted.line_items && extracted.line_items.length > 0) {
+        setTreatmentItems(extracted.line_items.map((it: any, idx: number) => ({
+          id: `item-${Date.now()}-${idx}`,
+          category: it.category || 'INVESTIGATION',
+          code: it.code || `ITEM-${idx}`,
+          description: it.description || '',
+          quantity: it.quantity || 1,
+          unit_amount: it.unit_amount || 0
+        })));
+      }
+      // notify("Autofill complete!");
+    } catch (err: any) {
+      alert("Autofill failed: " + err.message);
+    }
+  };
+
   const handleCreateCase = async (e: React.FormEvent) => {
+
     e.preventDefault();
     try {
       const activeHospitalId = cases[0]?.hospital?.id || 'aaf0c56a-847d-4c75-9822-7811df715c07';
@@ -1416,8 +1501,22 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
               </button>
             </div>
 
+            
+            
             <form onSubmit={handleCreateCase} className="mt-4 space-y-3.5 text-xs overflow-y-auto pr-1 flex-1">
+              <div className="bg-teal-50 border border-teal-100 rounded-xl p-3 flex items-center justify-between mb-2">
+                <div className="text-teal-800 text-xs font-semibold">
+                  ⚡ AI Autofill
+                  <p className="text-[10px] text-teal-600 font-normal mt-0.5">Upload a referral letter or bill (.docx, .pdf) to auto-extract patient details, diagnosis, and items.</p>
+                </div>
+                <label className="cursor-pointer bg-white border border-teal-200 text-teal-700 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-teal-50 transition-colors">
+                  Upload & Autofill
+                  <input type="file" accept=".pdf,.docx,.txt" className="hidden" onChange={handleAutofillCase} />
+                </label>
+              </div>
               <div className="grid grid-cols-2 gap-3">
+
+
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">Full Name</label>
                   <input

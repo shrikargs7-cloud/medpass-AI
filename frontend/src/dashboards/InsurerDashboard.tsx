@@ -237,27 +237,43 @@ export const InsurerDashboard: React.FC = () => {
     }
   };
 
-  const extractPolicyData = () => {
+  const extractPolicyData = async () => {
     if (!policyFile) return;
     setExtractingPolicy(true);
-    // Simulate OCR delay
-    setTimeout(() => {
-      setExtractingPolicy(false);
-      // Auto-fill form from simulated PDF extraction
-      setNewPolicyForm({
-        ...newPolicyForm,
-        plan_name: 'Smart Health Premium Extract',
-        sum_insured: 1000000,
-        room_rent_cap: 8000,
-        icu_rent_cap: 15000,
-        co_pay_pct: 0
+    const formData = new FormData();
+    formData.append('file', policyFile);
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/cases/aux/policies/extract`, {
+        method: 'POST',
+        body: formData
       });
-      setCustomFields([
-        ...customFields,
-        { field_name: 'Maternity Benefit', description: 'Extracted from PDF Sec 3.1', coverage_val: '₹50,000' }
-      ]);
-      notify('Policy clauses extracted via OCR successfully.');
-    }, 2500);
+      if (!res.ok) throw new Error("Failed to extract policy");
+      const data = await res.json();
+      const extracted = data.extracted_data;
+      
+      setNewPolicyForm(prev => ({
+        ...prev,
+        policy_ref: extracted.policy_number || prev.policy_ref,
+        plan_name: extracted.plan_name || prev.plan_name,
+        sum_insured: extracted.sum_insured || prev.sum_insured,
+        deductible: extracted.deductible || prev.deductible,
+        co_pay_pct: extracted.co_pay_pct || prev.co_pay_pct
+      }));
+
+      if (extracted.exclusions && extracted.exclusions.length > 0) {
+        setCustomFields(extracted.exclusions.map((ex: string) => ({
+          field_name: 'Exclusion',
+          description: ex,
+          coverage_val: 'No Cover'
+        })));
+      } else {
+         setCustomFields([]);
+      }
+    } catch (err: any) {
+      alert("Extraction failed: " + err.message);
+    } finally {
+      setExtractingPolicy(false);
+    }
   };
 
   // Filtered Claims
