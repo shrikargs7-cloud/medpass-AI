@@ -195,15 +195,30 @@ class TraceExportEngine:
                     "Gender": e.get("sex_category", "Unknown"),
                     "City_Category": e.get("city_bucket", "Unknown"),
                     "Hospital_Tier": e.get("facility_tier", "Unknown"),
-                    "Diagnosis": cond_names or "No Diagnosis Recorded",
-                    "Treatment": proc_names or "No Treatment Recorded",
+                    
+                    # Clinical Data
+                    "Diagnosis_Name": cond_names or "No Diagnosis Recorded",
+                    "Diagnosis_Code": ", ".join([c.get("concept_code", "") for c in e_cond if c.get("concept_code")]) or "N/A",
+                    "Diagnosis_System": ", ".join([c.get("concept_system", "") for c in e_cond if c.get("concept_system")]) or "N/A",
+                    
+                    # Treatment Data
+                    "Treatment_Name": proc_names or "No Treatment Recorded",
+                    "Treatment_Code": ", ".join([p.get("concept_code", "") for p in e_proc if p.get("concept_code")]) or "N/A",
+                    "Treatment_Category": ", ".join([p.get("category", "") for p in e_proc if p.get("category")]) or "N/A",
+                    
+                    # Operational Data
                     "Encounter_Type": e.get("encounter_type", "Unknown"),
+                    "Start_Month": e.get("start_month", "Unknown"),
+                    "End_Month": e.get("end_month", "Unknown"),
                     "Length_Of_Stay_Days": e.get("los_days", 1),
-                    "Insurance_Plan": primary_ins.get("plan_category", "Unknown"),
+                    
+                    # Financial/Insurance Data
+                    "Payer_Tier": primary_ins.get("payer_tier", "Unknown"),
+                    "Insurance_Plan_Category": primary_ins.get("plan_category", "Unknown"),
                     "Billed_Amount_Bucket": primary_ins.get("amount_bucket", "Unknown"),
                     "Covered_Amount": primary_ins.get("covered_amount", 0.0),
                     "Patient_Payable": primary_ins.get("patient_payable", 0.0),
-                    "Insurance_Status": primary_ins.get("event_type", "Unknown")
+                    "Insurance_Decision_Status": primary_ins.get("event_type", "Unknown")
                 })
 
             df_unified = pd.DataFrame(unified_data if unified_data else [{"Message": "No operational data found"}])
@@ -238,12 +253,26 @@ class TraceExportEngine:
             # 4. Data dictionary
             dict_file = os.path.join(tmpdir, "data_dictionary.csv")
             dict_df = pd.DataFrame([
-                {"column_name": "encounter_key", "domain": "encounters", "type": "TEXT", "description": "Safe random encounter identifier"},
-                {"column_name": "subject_key", "domain": "encounters", "type": "UUID", "description": "One-way pseudonymous patient key"},
-                {"column_name": "facility_tier", "domain": "encounters", "type": "CATEGORICAL", "description": "Generalized hospital tier (TIER_1/2/3)"},
-                {"column_name": "age_band", "domain": "encounters", "type": "CATEGORICAL", "description": "15-year generalized age band"},
-                {"column_name": "concept_code", "domain": "conditions", "type": "TEXT", "description": "ICD-10 clinical diagnosis code"},
-                {"column_name": "covered_amount", "domain": "insurance", "type": "NUMERIC", "description": "Adjudicated insurer payable amount"}
+                {"column_name": "Age_Band", "domain": "demographics", "type": "CATEGORICAL", "description": "15-year generalized age band (PII-free)"},
+                {"column_name": "Gender", "domain": "demographics", "type": "CATEGORICAL", "description": "Sex at birth"},
+                {"column_name": "City_Category", "domain": "facility", "type": "CATEGORICAL", "description": "Generalized geographical bucket (e.g., METRO, TIER_2)"},
+                {"column_name": "Hospital_Tier", "domain": "facility", "type": "CATEGORICAL", "description": "Generalized hospital tier (TIER_1/2/3)"},
+                {"column_name": "Diagnosis_Name", "domain": "clinical", "type": "TEXT", "description": "Primary clinical diagnosis name"},
+                {"column_name": "Diagnosis_Code", "domain": "clinical", "type": "TEXT", "description": "ICD-10 clinical diagnosis code"},
+                {"column_name": "Diagnosis_System", "domain": "clinical", "type": "TEXT", "description": "Nomenclature system (e.g., ICD-10)"},
+                {"column_name": "Treatment_Name", "domain": "clinical", "type": "TEXT", "description": "Primary procedure or treatment performed"},
+                {"column_name": "Treatment_Code", "domain": "clinical", "type": "TEXT", "description": "Medical procedure code"},
+                {"column_name": "Treatment_Category", "domain": "clinical", "type": "CATEGORICAL", "description": "Treatment classification bucket"},
+                {"column_name": "Encounter_Type", "domain": "operations", "type": "CATEGORICAL", "description": "Inpatient vs Outpatient"},
+                {"column_name": "Start_Month", "domain": "operations", "type": "TEXT", "description": "Admission month (YYYY-MM)"},
+                {"column_name": "End_Month", "domain": "operations", "type": "TEXT", "description": "Discharge month (YYYY-MM)"},
+                {"column_name": "Length_Of_Stay_Days", "domain": "operations", "type": "NUMERIC", "description": "Total inpatient days"},
+                {"column_name": "Payer_Tier", "domain": "insurance", "type": "CATEGORICAL", "description": "Insurer class (e.g., TIER_1_PVT)"},
+                {"column_name": "Insurance_Plan_Category", "domain": "insurance", "type": "CATEGORICAL", "description": "Policy type (e.g., COMPREHENSIVE_BASE)"},
+                {"column_name": "Billed_Amount_Bucket", "domain": "financial", "type": "CATEGORICAL", "description": "Gross billed amount range"},
+                {"column_name": "Covered_Amount", "domain": "financial", "type": "NUMERIC", "description": "Adjudicated insurer payable amount"},
+                {"column_name": "Patient_Payable", "domain": "financial", "type": "NUMERIC", "description": "Out-of-pocket patient liability"},
+                {"column_name": "Insurance_Decision_Status", "domain": "insurance", "type": "CATEGORICAL", "description": "Preauth/Claim processing state"}
             ])
             dict_df.to_csv(dict_file, index=False)
 
