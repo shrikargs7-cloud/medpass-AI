@@ -85,18 +85,20 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             )}
 
-            {/* Trace Commons Longitudinal Research & Datasets */}
-            <button
-              onClick={() => setActivePortal('trace')}
-              className={`flex items-center px-3 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                activePortal === 'trace'
-                  ? 'bg-white text-purple-900 shadow-xs border border-slate-200/80'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-              }`}
-            >
-              <Layers className="w-4 h-4 mr-1.5 text-purple-600" />
-              Trace Commons
-            </button>
+            {/* Database / Admin Center */}
+            {userSession && userSession.role === 'admin' && (
+              <button
+                onClick={() => setActivePortal('trace')}
+                className={`flex items-center px-3 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  activePortal === 'trace'
+                    ? 'bg-white text-purple-900 shadow-xs border border-slate-200/80'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                }`}
+              >
+                <Layers className="w-4 h-4 mr-1.5 text-purple-600" />
+                Database
+              </button>
+            )}
           </nav>
 
           {/* User Session & Utility Buttons */}

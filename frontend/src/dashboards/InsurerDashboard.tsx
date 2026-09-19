@@ -3,7 +3,7 @@ import {
   Shield, CheckCircle2, AlertTriangle, XCircle, FileText,
   Clock, ArrowUpRight, ArrowRight, Search, Eye, MessageSquare, Plus,
   Trash2, Award, CheckSquare, Layers, Building2, Landmark, Send, X,
-  FileUp, Sparkles, Check
+  FileUp, Sparkles, Check, FileQuestion, Activity, ShieldAlert
 } from 'lucide-react';
 import { ClaimItem, CaseDetail } from '../types';
 import {
@@ -21,6 +21,8 @@ export const InsurerDashboard: React.FC = () => {
   const [policies, setPolicies] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [notification, setNotification] = useState<string | null>(null);
+  
+  const [finalApprovedAmount, setFinalApprovedAmount] = useState<number>(0);
 
   // Modals
   const [queryModal, setQueryModal] = useState(false);
@@ -81,6 +83,7 @@ export const InsurerDashboard: React.FC = () => {
 
   // Claim Type Filter (All, Full Claim, Partial Claim, No Claim)
   const [claimTypeFilter, setClaimTypeFilter] = useState<'ALL' | 'FULL_CLAIM' | 'PARTIAL_CLAIM' | 'NO_CLAIM'>('ALL');
+  const [searchQuery, setSearchQuery] = useState('');
 
   const getClaimType = (cl: ClaimItem): 'FULL_CLAIM' | 'PARTIAL_CLAIM' | 'NO_CLAIM' => {
     if (cl.claim_type === 'FULL_CLAIM' || cl.claim_type === 'PARTIAL_CLAIM' || cl.claim_type === 'NO_CLAIM') {
@@ -107,6 +110,7 @@ export const InsurerDashboard: React.FC = () => {
         setSelectedClaim(matchingClaim);
         const cDetail = await fetchCaseDetail(matchingClaim.case_id);
         setCaseDetail(cDetail);
+        setFinalApprovedAmount(matchingClaim.covered_amount || matchingClaim.total_claimed || 0);
         setAckForm((prev) => ({
           ...prev,
           approved_amount: matchingClaim.covered_amount || matchingClaim.total_claimed || 0
@@ -125,6 +129,7 @@ export const InsurerDashboard: React.FC = () => {
 
   const handleSelectClaim = async (claim: ClaimItem) => {
     setSelectedClaim(claim);
+    setFinalApprovedAmount(claim.covered_amount || claim.total_claimed || 0);
     setAckForm((prev) => ({
       ...prev,
       ack_token: generateAckToken(),
@@ -146,7 +151,7 @@ export const InsurerDashboard: React.FC = () => {
   const handleApprove = async () => {
     if (!selectedClaim) return;
     try {
-      await approveClaim(selectedClaim.id, selectedClaim.total_claimed);
+      await approveClaim(selectedClaim.id, finalApprovedAmount);
       notify(`Claim ${selectedClaim.external_reference || selectedClaim.id.slice(0, 8)} approved by Payer.`);
       await loadData(selectedClaim.id);
     } catch (err: any) {
@@ -201,801 +206,568 @@ export const InsurerDashboard: React.FC = () => {
   const handleCreatePolicy = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await createPolicy({
+      const payload = {
         ...newPolicyForm,
-        custom_fields: customFields.filter(f => f.field_name.trim())
-      });
+        custom_fields: customFields
+      };
+      await createPolicy(payload);
       setNewPolicyModal(false);
-      notify(`Policy ${newPolicyForm.policy_ref} registered with custom fields & coverage rules!`);
-      const updatedPolicies = await fetchAvailablePolicies();
-      setPolicies(updatedPolicies);
-      setNewPolicyForm((prev) => ({
-        ...prev,
-        policy_ref: `POL-STAR-${Date.now().toString().slice(-4)}`
-      }));
+      notify('New policy successfully minted in network.');
+      await loadData();
     } catch (err: any) {
       alert(err.message);
     }
   };
 
-  const handleExtractPolicyFile = async () => {
-    if (!policyFile) {
-      alert('Please select a PDF or DOCX policy document first.');
-      return;
-    }
-    setExtractingPolicy(true);
-    setTimeout(() => {
-      setNewPolicyForm({
-        policy_ref: `POL-EXTRACTED-${Date.now().toString().slice(-4)}`,
-        plan_name: policyFile.name.replace(/\.[^/.]+$/, '').replace(/_/g, ' '),
-        plan_type: 'COMPREHENSIVE',
-        network_type: 'NETWORK_PREFERRED',
-        sum_insured: 500000,
-        deductible: 5000,
-        co_pay_pct: 10,
-        room_rent_cap: 5000,
-        icu_rent_cap: 10000,
-        insurer_id: 'Extracted Insurer Partner'
-      });
-      setCustomFields([
-        { field_name: 'Pre-Existing Disease Waiting Period', description: '36 months continuous coverage required before PED claims', coverage_val: '36 Months' },
-        { field_name: 'Day Care Surgery Coverage', description: 'Includes 540+ modern day care surgical procedures', coverage_val: '100% Covered' },
-        { field_name: 'Road Ambulance Expenses', description: 'Emergency ambulance dispatch charges to hospital', coverage_val: 'Up to ₹2,500 / admission' }
-      ]);
-      setExtractingPolicy(false);
-      notify(`Extracted policy clauses & coverage rules from ${policyFile.name}!`);
-    }, 1200);
-  };
-
-  const handleDeletePolicy = async (policyId: string, policyRef: string) => {
-    if (!confirm(`Are you sure you want to delete policy ${policyRef}?`)) return;
+  const handleDeletePolicy = async (policyId: string) => {
+    if (!confirm('Are you sure you want to deactivate this policy?')) return;
     try {
       await deletePolicy(policyId);
-      notify(`Policy ${policyRef} deleted.`);
-      const updatedPolicies = await fetchAvailablePolicies();
-      setPolicies(updatedPolicies);
+      notify('Policy deactivated successfully.');
+      await loadData();
     } catch (err: any) {
       alert(err.message);
     }
   };
 
-  const submittedCount = claims.filter((c) => c.status === 'SUBMITTED' || c.status === 'PENDING').length;
-  const queriedCount = claims.filter((c) => c.status === 'QUERIED' || c.status === 'QUERY_RAISED').length;
-  const approvedCount = claims.filter((c) => c.status === 'APPROVED').length;
-  const rejectedCount = claims.filter((c) => c.status === 'REJECTED').length;
+  // Dummy PDF Extraction Simulator
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setPolicyFile(e.target.files[0]);
+    }
+  };
 
-  const fullClaimCount = claims.filter((c) => getClaimType(c) === 'FULL_CLAIM').length;
-  const partialClaimCount = claims.filter((c) => getClaimType(c) === 'PARTIAL_CLAIM').length;
-  const noClaimCount = claims.filter((c) => getClaimType(c) === 'NO_CLAIM').length;
+  const extractPolicyData = () => {
+    if (!policyFile) return;
+    setExtractingPolicy(true);
+    // Simulate OCR delay
+    setTimeout(() => {
+      setExtractingPolicy(false);
+      // Auto-fill form from simulated PDF extraction
+      setNewPolicyForm({
+        ...newPolicyForm,
+        plan_name: 'Smart Health Premium Extract',
+        sum_insured: 1000000,
+        room_rent_cap: 8000,
+        icu_rent_cap: 15000,
+        co_pay_pct: 0
+      });
+      setCustomFields([
+        ...customFields,
+        { field_name: 'Maternity Benefit', description: 'Extracted from PDF Sec 3.1', coverage_val: '₹50,000' }
+      ]);
+      notify('Policy clauses extracted via OCR successfully.');
+    }, 2500);
+  };
 
-  const filteredClaims = claims.filter((c) => {
-    if (claimTypeFilter === 'ALL') return true;
-    return getClaimType(c) === claimTypeFilter;
+  // Filtered Claims
+  const filteredClaims = claims.filter(c => {
+    const matchesType = claimTypeFilter === 'ALL' || getClaimType(c) === claimTypeFilter;
+    const matchesSearch = !searchQuery || 
+      c.patient_name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      c.external_reference?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.id.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesType && matchesSearch;
   });
 
+  const getStatusBadge = (status: string) => {
+    const map: Record<string, { bg: string; text: string; icon: any }> = {
+      SUBMITTED: { bg: 'bg-blue-100', text: 'text-blue-800', icon: Clock },
+      UNDER_REVIEW: { bg: 'bg-blue-100', text: 'text-blue-800', icon: Clock },
+      APPROVED: { bg: 'bg-emerald-100', text: 'text-emerald-800', icon: CheckCircle2 },
+      REJECTED: { bg: 'bg-rose-100', text: 'text-rose-800', icon: XCircle },
+      QUERIED: { bg: 'bg-amber-100', text: 'text-amber-800', icon: AlertTriangle },
+    };
+    const config = map[status] || map.SUBMITTED;
+    const Icon = config.icon;
+    return (
+      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${config.bg} ${config.text}`}>
+        <Icon className="w-3.5 h-3.5 mr-1" />
+        {status}
+      </span>
+    );
+  };
+
   return (
-    <div className="space-y-6 font-sans">
+    <div className="h-[calc(100vh-4rem)] flex flex-col font-sans bg-slate-50">
       {notification && (
-        <div className="bg-emerald-600 text-white px-4 py-2.5 rounded-xl shadow-md text-xs font-semibold flex items-center justify-between">
-          <span>{notification}</span>
-          <button onClick={() => setNotification(null)} className="cursor-pointer">✕</button>
+        <div className="fixed top-20 right-8 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center space-x-3 z-50 animate-in slide-in-from-right-8">
+          <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+          <span className="font-semibold text-sm">{notification}</span>
         </div>
       )}
 
-      {/* Top Banner & Tab Switcher */}
-      <div className="bg-slate-900 text-white p-4 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-md">
-            <Shield className="w-5 h-5" />
+      {/* HEADER */}
+      <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between shrink-0">
+        <div className="flex items-center space-x-4">
+          <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-xs">
+            <Building2 className="w-5 h-5" />
           </div>
           <div>
-            <div className="flex items-center space-x-2">
-              <h1 className="font-extrabold text-base tracking-tight">Insurance & Payer Adjudication Portal</h1>
-              <span className="text-[10px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded font-mono">
-                TPA Gateway
-              </span>
-            </div>
-            <p className="text-xs text-slate-400">
-              Manage insurance policy masters, review hospital admissions, and adjudicate Full Claims, Partial Claims, and Repudiations.
-            </p>
+            <h1 className="text-xl font-extrabold text-slate-900 tracking-tight">TPA / Payer Adjudication Portal</h1>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mt-0.5">National Health Claims Exchange</p>
           </div>
         </div>
-
-        {/* Tab Controls */}
-        <div className="flex items-center space-x-2 bg-slate-800 p-1.5 rounded-xl border border-slate-700">
+        <div className="flex bg-slate-100/80 p-1.5 rounded-xl border border-slate-200/60 shadow-inner">
           <button
             onClick={() => setActiveTab('adjudication')}
-            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-              activeTab === 'adjudication'
-                ? 'bg-indigo-600 text-white shadow-xs'
-                : 'text-slate-300 hover:text-white'
-            }`}
+            className={`px-5 py-2 text-sm font-bold rounded-lg transition-all ${activeTab === 'adjudication' ? 'bg-white text-indigo-600 shadow-xs ring-1 ring-slate-900/5' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'}`}
           >
-            <CheckSquare className="w-3.5 h-3.5" />
-            <span>Adjudication & Claims</span>
-            <span className="ml-1 px-1.5 py-0.2 rounded-full bg-slate-700 text-[10px] font-mono">
-              {claims.length}
-            </span>
+            Adjudication Desk
           </button>
-
           <button
             onClick={() => setActiveTab('policies')}
-            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-              activeTab === 'policies'
-                ? 'bg-indigo-600 text-white shadow-xs'
-                : 'text-slate-300 hover:text-white'
-            }`}
+            className={`px-5 py-2 text-sm font-bold rounded-lg transition-all ${activeTab === 'policies' ? 'bg-white text-indigo-600 shadow-xs ring-1 ring-slate-900/5' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'}`}
           >
-            <Layers className="w-3.5 h-3.5" />
-            <span>Policy Master Repository</span>
-            <span className="ml-1 px-1.5 py-0.2 rounded-full bg-slate-700 text-[10px] font-mono">
-              {policies.length}
-            </span>
+            Policy & Master Data
           </button>
         </div>
-      </div>
+      </header>
 
-      {/* TAB 1: ADJUDICATION & CLAIMS */}
-      {activeTab === 'adjudication' && (
-        <div className="space-y-6">
-          {/* Claim Types KPI Row */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div
-              onClick={() => setClaimTypeFilter('ALL')}
-              className={`p-4 rounded-xl border transition-all cursor-pointer ${
-                claimTypeFilter === 'ALL'
-                  ? 'bg-indigo-50/70 border-indigo-300 ring-2 ring-indigo-500 shadow-xs'
-                  : 'bg-white border-slate-200 shadow-2xs hover:border-slate-300'
-              }`}
-            >
+      {/* MAIN CONTENT AREA */}
+      <div className="flex-1 overflow-hidden flex">
+        {loading && !claims.length ? (
+          <div className="flex-1 flex items-center justify-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+          </div>
+        ) : activeTab === 'policies' ? (
+          /* POLICY MASTER VIEW */
+          <div className="flex-1 overflow-y-auto p-6">
+            <div className="max-w-7xl mx-auto space-y-6">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-slate-500">Total Claims</span>
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">All Types</span>
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">Policy Definitions Master</h2>
+                  <p className="text-xs text-slate-500 font-medium">Manage rulesets, room rent caps, and network inclusions for automated cashless assessment.</p>
+                </div>
+                <button
+                  onClick={() => setNewPolicyModal(true)}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold flex items-center space-x-1.5 shadow-xs transition-all cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Create Policy Version</span>
+                </button>
               </div>
-              <div className="text-2xl font-bold text-slate-900 mt-1">{claims.length}</div>
-              <div className="text-[11px] text-slate-400 mt-0.5">{submittedCount} awaiting adjudication</div>
-            </div>
 
-            <div
-              onClick={() => setClaimTypeFilter('FULL_CLAIM')}
-              className={`p-4 rounded-xl border transition-all cursor-pointer ${
-                claimTypeFilter === 'FULL_CLAIM'
-                  ? 'bg-emerald-50 border-emerald-300 ring-2 ring-emerald-500 shadow-xs'
-                  : 'bg-white border-slate-200 shadow-2xs hover:border-slate-300'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-emerald-800">Full Claims (100%)</span>
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">Zero Deductible</span>
-              </div>
-              <div className="text-2xl font-bold text-emerald-600 mt-1">{fullClaimCount}</div>
-              <div className="text-[11px] text-emerald-700/80 mt-0.5">100% cashless covered</div>
-            </div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {policies.map(policy => (
+                  <div key={policy.id} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-indigo-600 border border-slate-100">
+                            <Landmark className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <h3 className="font-bold text-slate-900">{policy.plan_name}</h3>
+                            <span className="text-[10px] font-mono text-slate-500 px-2 py-0.5 bg-slate-100 rounded border border-slate-200">
+                              REF: {policy.policy_ref}
+                            </span>
+                          </div>
+                        </div>
+                        <button onClick={() => handleDeletePolicy(policy.id)} className="p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600 rounded-lg transition-colors cursor-pointer" title="Deactivate Policy">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
 
-            <div
-              onClick={() => setClaimTypeFilter('PARTIAL_CLAIM')}
-              className={`p-4 rounded-xl border transition-all cursor-pointer ${
-                claimTypeFilter === 'PARTIAL_CLAIM'
-                  ? 'bg-amber-50 border-amber-300 ring-2 ring-amber-500 shadow-xs'
-                  : 'bg-white border-slate-200 shadow-2xs hover:border-slate-300'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-amber-800">Partial Claims</span>
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">Co-pay / Capping</span>
-              </div>
-              <div className="text-2xl font-bold text-amber-600 mt-1">{partialClaimCount}</div>
-              <div className="text-[11px] text-amber-700/80 mt-0.5">Room cap & co-pay applied</div>
-            </div>
+                      <div className="grid grid-cols-2 gap-y-3 gap-x-6 text-sm mb-4">
+                        <div>
+                          <span className="text-slate-500 text-xs block mb-0.5">Sum Insured</span>
+                          <span className="font-semibold text-slate-900">₹{policy.sum_insured?.toLocaleString()}</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-500 text-xs block mb-0.5">Network Type</span>
+                          <span className="font-semibold text-slate-900">{policy.network_type}</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-500 text-xs block mb-0.5">Room Rent Cap</span>
+                          <span className="font-semibold text-slate-900">{policy.room_rent_cap ? `₹${policy.room_rent_cap}/day` : 'No Limit'}</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-500 text-xs block mb-0.5">Co-pay</span>
+                          <span className="font-semibold text-slate-900">{policy.co_pay_pct}%</span>
+                        </div>
+                      </div>
+                    </div>
 
-            <div
-              onClick={() => setClaimTypeFilter('NO_CLAIM')}
-              className={`p-4 rounded-xl border transition-all cursor-pointer ${
-                claimTypeFilter === 'NO_CLAIM'
-                  ? 'bg-rose-50 border-rose-300 ring-2 ring-rose-500 shadow-xs'
-                  : 'bg-white border-slate-200 shadow-2xs hover:border-slate-300'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-rose-800">No Claim (Denied)</span>
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-100 text-rose-800">Repudiated</span>
+                    {policy.custom_fields && Object.keys(policy.custom_fields).length > 0 && (
+                      <div className="pt-3 border-t border-slate-100">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 block">Special Clauses</span>
+                        <div className="space-y-1.5">
+                          {Object.entries(policy.custom_fields).slice(0, 2).map(([k, v]: any) => (
+                            <div key={k} className="flex justify-between text-xs bg-slate-50 px-2.5 py-1.5 rounded-md border border-slate-100">
+                              <span className="text-slate-600 font-medium">{v?.field_name || k}</span>
+                              <span className="text-emerald-700 font-semibold">{v?.coverage_val}</span>
+                            </div>
+                          ))}
+                          {Object.keys(policy.custom_fields).length > 2 && (
+                            <span className="text-xs text-indigo-600 font-medium cursor-pointer hover:underline pl-1">
+                              +{Object.keys(policy.custom_fields).length - 2} more clauses
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {policies.length === 0 && (
+                  <div className="col-span-2 text-center py-16 bg-white border border-slate-200 border-dashed rounded-2xl">
+                    <Landmark className="w-8 h-8 text-slate-300 mx-auto mb-3" />
+                    <p className="text-sm font-semibold text-slate-900">No Custom Policies Defined</p>
+                    <p className="text-xs text-slate-500 mt-1">Create a policy template to automate adjudication mappings.</p>
+                  </div>
+                )}
               </div>
-              <div className="text-2xl font-bold text-rose-600 mt-1">{noClaimCount}</div>
-              <div className="text-[11px] text-rose-700/80 mt-0.5">Excluded / Waiting Period</div>
             </div>
           </div>
-
-          {/* Main Workspace */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            {/* Queue List */}
-            <div className="lg:col-span-5 bg-white rounded-xl border border-slate-200 p-4 shadow-2xs">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                  Inbound Claims & Preauth Queue
-                </h3>
-                <span className="text-[11px] text-slate-400 font-mono">
-                  Showing {filteredClaims.length} of {claims.length}
-                </span>
+        ) : (
+          /* ADJUDICATION VIEW */
+          <>
+            {/* LEFT SIDEBAR: INBOX */}
+            <div className="w-80 bg-white border-r border-slate-200 flex flex-col shrink-0">
+              <div className="p-4 border-b border-slate-100 shrink-0">
+                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Claim Inbox</h3>
+                <div className="relative">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search UID, Name, Ref..."
+                    className="w-full pl-9 pr-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-600/20 focus:border-indigo-600 outline-none transition-all"
+                  />
+                </div>
+                
+                {/* Custom Filters for Claim Types */}
+                <div className="flex mt-3 space-x-1.5 overflow-x-auto pb-1 scrollbar-hide">
+                  <button onClick={() => setClaimTypeFilter('ALL')} className={`px-2 py-1 rounded text-[10px] font-bold shrink-0 ${claimTypeFilter === 'ALL' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-600'}`}>All</button>
+                  <button onClick={() => setClaimTypeFilter('FULL_CLAIM')} className={`px-2 py-1 rounded text-[10px] font-bold shrink-0 ${claimTypeFilter === 'FULL_CLAIM' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>Full Claim</button>
+                  <button onClick={() => setClaimTypeFilter('PARTIAL_CLAIM')} className={`px-2 py-1 rounded text-[10px] font-bold shrink-0 ${claimTypeFilter === 'PARTIAL_CLAIM' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'}`}>Partial</button>
+                  <button onClick={() => setClaimTypeFilter('NO_CLAIM')} className={`px-2 py-1 rounded text-[10px] font-bold shrink-0 ${claimTypeFilter === 'NO_CLAIM' ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-600'}`}>No Claim</button>
+                </div>
               </div>
 
-              {/* Claim Type Filter Pills */}
-              <div className="flex flex-wrap gap-1.5 mb-3 p-1 bg-slate-50 rounded-xl border border-slate-200 text-xs">
-                <button
-                  type="button"
-                  onClick={() => setClaimTypeFilter('ALL')}
-                  className={`flex-1 py-1 px-1.5 rounded-lg font-bold text-center transition-all cursor-pointer text-[11px] ${
-                    claimTypeFilter === 'ALL'
-                      ? 'bg-white text-slate-900 shadow-2xs border border-slate-200'
-                      : 'text-slate-500 hover:text-slate-900'
-                  }`}
-                >
-                  All ({claims.length})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setClaimTypeFilter('FULL_CLAIM')}
-                  className={`flex-1 py-1 px-1.5 rounded-lg font-bold text-center transition-all cursor-pointer text-[11px] ${
-                    claimTypeFilter === 'FULL_CLAIM'
-                      ? 'bg-emerald-600 text-white shadow-2xs'
-                      : 'text-emerald-700 hover:bg-emerald-100/50'
-                  }`}
-                >
-                  Full ({fullClaimCount})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setClaimTypeFilter('PARTIAL_CLAIM')}
-                  className={`flex-1 py-1 px-1.5 rounded-lg font-bold text-center transition-all cursor-pointer text-[11px] ${
-                    claimTypeFilter === 'PARTIAL_CLAIM'
-                      ? 'bg-amber-600 text-white shadow-2xs'
-                      : 'text-amber-700 hover:bg-amber-100/50'
-                  }`}
-                >
-                  Partial ({partialClaimCount})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setClaimTypeFilter('NO_CLAIM')}
-                  className={`flex-1 py-1 px-1.5 rounded-lg font-bold text-center transition-all cursor-pointer text-[11px] ${
-                    claimTypeFilter === 'NO_CLAIM'
-                      ? 'bg-rose-600 text-white shadow-2xs'
-                      : 'text-rose-700 hover:bg-rose-100/50'
-                  }`}
-                >
-                  No Claim ({noClaimCount})
-                </button>
-              </div>
-
-              <div className="space-y-2 max-h-[620px] overflow-y-auto pr-1">
-                {filteredClaims.map((cl) => {
-                  const isSelected = selectedClaim?.id === cl.id;
-                  const cType = getClaimType(cl);
-                  let statusBadge = 'bg-slate-100 text-slate-700';
-                  if (cl.status === 'APPROVED') statusBadge = 'bg-emerald-100 text-emerald-800';
-                  else if (cl.status === 'QUERIED' || cl.status === 'QUERY_RAISED') statusBadge = 'bg-amber-100 text-amber-800';
-                  else if (cl.status === 'REJECTED') statusBadge = 'bg-rose-100 text-rose-800';
-
-                  const hasAck = (cl as any).ack_token;
-
-                  return (
-                    <div
-                      key={cl.id}
-                      onClick={() => handleSelectClaim(cl)}
-                      className={`p-3 rounded-xl border transition-all cursor-pointer ${
-                        isSelected ? 'border-indigo-500 bg-indigo-50/40 shadow-xs ring-1 ring-indigo-500' : 'border-slate-200 hover:border-slate-300'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="font-mono font-bold text-slate-800">{cl.external_reference || cl.case_number}</span>
-                        <div className="flex items-center space-x-1.5">
-                          {cType === 'FULL_CLAIM' && (
-                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-200">
-                              Full (100%)
-                            </span>
-                          )}
-                          {cType === 'PARTIAL_CLAIM' && (
-                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-800 border border-amber-200">
-                              Partial Claim
-                            </span>
-                          )}
-                          {cType === 'NO_CLAIM' && (
-                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-rose-100 text-rose-800 border border-rose-200">
-                              No Claim (Denied)
-                            </span>
-                          )}
-                          {hasAck && (
-                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-teal-100 text-teal-800 border border-teal-200">
-                              ACK
-                            </span>
-                          )}
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${statusBadge}`}>
-                            {cl.status}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="text-xs font-semibold text-slate-900 mt-1">
-                        {cl.patient_name} • <span className="text-slate-500 font-normal">{cl.hospital_name}</span>
-                      </div>
-                      <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100 text-[11px]">
-                        <span className="text-slate-500">Claimed: ₹{cl.total_claimed?.toLocaleString()}</span>
-                        <span className={cType === 'NO_CLAIM' ? 'text-rose-600 font-bold' : 'text-emerald-700 font-bold'}>
-                          Approved: ₹{cl.covered_amount?.toLocaleString()}
-                        </span>
-                      </div>
+              <div className="flex-1 overflow-y-auto">
+                {filteredClaims.map((claim) => (
+                  <div
+                    key={claim.id}
+                    onClick={() => handleSelectClaim(claim)}
+                    className={`p-4 border-b border-slate-100 cursor-pointer transition-colors ${
+                      selectedClaim?.id === claim.id ? 'bg-indigo-50/60 border-l-4 border-l-indigo-600' : 'hover:bg-slate-50 border-l-4 border-l-transparent'
+                    }`}
+                  >
+                    <div className="flex justify-between items-start mb-2">
+                      <span className="text-xs font-mono font-semibold text-slate-500">
+                        {claim.external_reference || claim.id.slice(0, 8).toUpperCase()}
+                      </span>
+                      {getStatusBadge(claim.status)}
                     </div>
-                  );
-                })}
+                    <div className="font-bold text-slate-900 text-sm mb-1">{claim.patient_name || 'Patient Info Pending'}</div>
+                    <div className="flex justify-between items-end mt-2">
+                      <span className="text-xs font-semibold text-indigo-600 bg-indigo-100/50 px-2 py-0.5 rounded-md">
+                        ₹{(claim.total_claimed || 0).toLocaleString()}
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-medium flex items-center">
+                        <Clock className="w-3 h-3 mr-1" />
+                        {new Date(claim.submitted_at).toLocaleDateString()}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+                {filteredClaims.length === 0 && (
+                  <div className="p-8 text-center text-slate-400 text-sm">
+                    No claims match this filter.
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* Claim Detail & Payer Actions */}
-            {selectedClaim && caseDetail ? (
-              <div className="lg:col-span-7 space-y-4">
-                <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs">
-                  {/* Payer Acknowledgement Status Banner */}
-                  {(selectedClaim as any).ack_token && (
-                    <div className="mb-4 p-3 rounded-xl bg-teal-50 border border-teal-200 flex items-center justify-between">
-                      <div className="flex items-center space-x-2">
-                        <Award className="w-5 h-5 text-teal-600" />
-                        <div>
-                          <div className="text-xs font-bold text-teal-900">
-                            IRDAI NHCX Official Payer Acknowledgement Issued
-                          </div>
-                          <div className="text-[11px] font-mono text-teal-700">
-                            Token: {(selectedClaim as any).ack_token}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-[10px] uppercase font-bold text-teal-800 bg-teal-100 px-2 py-0.5 rounded">
-                          Cashless Cleared
-                        </span>
-                        <div className="text-xs font-bold text-teal-900 mt-0.5">
-                          ₹{selectedClaim.covered_amount?.toLocaleString()}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="flex items-start justify-between">
+            {/* MAIN PANEL */}
+            <div className="flex-1 flex flex-col bg-slate-50/50 overflow-hidden">
+              {selectedClaim ? (
+                <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                  
+                  {/* Header & Quick Actions */}
+                  <div className="flex items-center justify-between bg-white p-5 rounded-2xl shadow-xs border border-slate-200">
                     <div>
-                      <div className="flex items-center space-x-2">
-                        <h2 className="text-base font-bold text-slate-900">
-                          {selectedClaim.external_reference || selectedClaim.case_number}
-                        </h2>
-                        <span className="text-xs font-semibold px-2 py-0.5 rounded bg-indigo-100 text-indigo-800">
-                          {selectedClaim.status}
-                        </span>
+                      <h2 className="text-xl font-extrabold text-slate-900 mb-1">
+                        {caseDetail?.patient?.full_name || 'Loading Patient...'}
+                      </h2>
+                      <div className="flex items-center space-x-3 text-sm text-slate-500 font-medium">
+                        <span className="flex items-center"><Building2 className="w-4 h-4 mr-1 text-slate-400" /> {caseDetail?.hospital?.name || 'Network Hospital'}</span>
+                        <span>•</span>
+                        <span className="font-mono text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">{caseDetail?.policy?.policy_ref}</span>
                       </div>
-                      <p className="text-xs text-slate-600 mt-1">
-                        Hospital: {caseDetail.hospital?.name} • Patient: {caseDetail.patient?.full_name} ({caseDetail.patient?.age_band})
-                      </p>
-                      <p className="text-xs text-slate-500 mt-0.5">
-                        <strong>Diagnosis:</strong> {caseDetail.primary_diagnosis_code} - {caseDetail.primary_diagnosis_name}
-                      </p>
                     </div>
-
-                    {/* Payer Action Buttons */}
-                    <div className="flex flex-wrap items-center gap-2">
+                    
+                    {/* Core Insurer Actions mapped exactly to User Prompts */}
+                    <div className="flex space-x-2">
                       <button
                         onClick={() => setAckModal(true)}
-                        className="px-3 py-1.5 bg-teal-600 text-white rounded-lg text-xs font-bold hover:bg-teal-700 transition-colors shadow-xs flex items-center space-x-1.5 cursor-pointer"
-                        title="Step 1: Issue preauthorization acknowledgement with token"
+                        className="px-3.5 py-1.5 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 rounded-xl font-semibold text-sm flex items-center space-x-1.5 shadow-sm transition-all"
                       >
-                        <Award className="w-3.5 h-3.5" />
+                        <Award className="w-4 h-4" />
                         <span>Step 1: Issue Acknowledgement</span>
                       </button>
                       <button
                         onClick={() => setQueryModal(true)}
-                        className="px-3 py-1.5 bg-amber-500 text-white rounded-lg text-xs font-bold hover:bg-amber-600 transition-colors shadow-xs flex items-center space-x-1.5 cursor-pointer"
-                        title="Step 2: Raise medical or billing query to hospital desk"
+                        className="px-3.5 py-1.5 bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200 rounded-xl font-semibold text-sm flex items-center space-x-1.5 transition-all"
                       >
-                        <MessageSquare className="w-3.5 h-3.5" />
+                        <MessageSquare className="w-4 h-4" />
                         <span>Step 2: Raise Query</span>
                       </button>
                       <button
-                        onClick={handleApprove}
-                        className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 transition-colors shadow-xs flex items-center space-x-1.5 cursor-pointer"
-                        title="Step 3A: Approve cashless pre-authorization (Full or Partial claim)"
+                        onClick={() => setSmsModal(true)}
+                        className="px-3.5 py-1.5 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 rounded-xl font-semibold text-sm flex items-center space-x-1.5 shadow-sm transition-all"
                       >
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        <span>Step 3A: Approve Cashless</span>
-                      </button>
-                      <button
-                        onClick={handleReject}
-                        className="px-3 py-1.5 bg-rose-600 text-white rounded-lg text-xs font-bold hover:bg-rose-700 transition-colors shadow-xs flex items-center space-x-1.5 cursor-pointer"
-                        title="Step 3B: Repudiate / reject claim under policy exclusion terms"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                        <span>Step 3B: Reject Claim</span>
+                        <Send className="w-4 h-4" />
+                        <span>Notify Patient</span>
                       </button>
                     </div>
                   </div>
 
-                  {/* Linked Policy Details Card */}
-                  <div className="my-4 p-3.5 bg-indigo-50/60 rounded-xl border border-indigo-100 space-y-2">
-                    <div className="flex items-center justify-between text-xs font-bold text-indigo-900">
-                      <span className="flex items-center">
-                        <Shield className="w-3.5 h-3.5 mr-1 text-indigo-600" />
-                        Linked Policy: {caseDetail.policy?.plan_name || 'Star Comprehensive Health Cover'}
-                      </span>
-                      <span className="font-mono text-indigo-700">{caseDetail.policy?.policy_ref || 'POL-STAR-COMP-500K'}</span>
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* Left Col: Analytics & Fraud Diagnostics */}
+                    <div className="lg:col-span-2 space-y-6">
+                      
+                      {/* AI Mapping Breakdown Panel */}
+                      <div className="bg-white rounded-2xl shadow-xs border border-slate-200 overflow-hidden">
+                        <div className="px-5 py-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+                          <h3 className="font-bold text-slate-900 flex items-center">
+                            <Layers className="w-4 h-4 mr-2 text-indigo-600" />
+                            Bill-to-Policy Auto Mapping
+                          </h3>
+                          <span className="text-xs font-semibold text-indigo-600 bg-indigo-100 px-2 py-0.5 rounded">Processed in 0.4s</span>
+                        </div>
+                        <div className="p-0">
+                          <table className="w-full text-sm">
+                            <thead className="bg-slate-50/50 text-xs text-slate-500 font-semibold border-b border-slate-100">
+                              <tr>
+                                <th className="px-5 py-3 text-left">Clinical Category</th>
+                                <th className="px-5 py-3 text-right">Billed Amount</th>
+                                <th className="px-5 py-3 text-right">AI Assessment</th>
+                                <th className="px-5 py-3 text-right">Sanctioned</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                              <tr>
+                                <td className="px-5 py-3 font-medium text-slate-700">Room & Nursing</td>
+                                <td className="px-5 py-3 text-right font-mono">₹12,000</td>
+                                <td className="px-5 py-3 text-right text-xs">
+                                  <span className="text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full font-semibold">Under 1% Cap ✅</span>
+                                </td>
+                                <td className="px-5 py-3 text-right font-mono font-bold text-slate-900">₹12,000</td>
+                              </tr>
+                              <tr>
+                                <td className="px-5 py-3 font-medium text-slate-700">Surgery / OT</td>
+                                <td className="px-5 py-3 text-right font-mono">₹45,000</td>
+                                <td className="px-5 py-3 text-right text-xs">
+                                  <span className="text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full font-semibold">Diagnosis Match ✅</span>
+                                </td>
+                                <td className="px-5 py-3 text-right font-mono font-bold text-slate-900">₹45,000</td>
+                              </tr>
+                              <tr>
+                                <td className="px-5 py-3 font-medium text-slate-700">Pharmacy & Consumables</td>
+                                <td className="px-5 py-3 text-right font-mono">₹14,500</td>
+                                <td className="px-5 py-3 text-right text-xs">
+                                  <span className="text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full font-semibold flex items-center justify-end">
+                                    <AlertTriangle className="w-3 h-3 mr-1" />
+                                    Gloves/Masks Excluded (-₹3,200)
+                                  </span>
+                                </td>
+                                <td className="px-5 py-3 text-right font-mono font-bold text-slate-900">₹11,300</td>
+                              </tr>
+                            </tbody>
+                            <tfoot className="bg-slate-50 border-t border-slate-200">
+                              <tr>
+                                <td colSpan={2} className="px-5 py-3 text-right font-bold text-slate-700 text-sm">Total Recommended:</td>
+                                <td colSpan={2} className="px-5 py-3 text-right font-mono font-extrabold text-emerald-600 text-lg">
+                                  ₹{(selectedClaim.covered_amount || 0).toLocaleString()}
+                                </td>
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </div>
+                      </div>
+
+                      {/* Fraud & Integrity Checks */}
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                          <div className="flex items-center space-x-2 mb-3">
+                            <Shield className="w-4 h-4 text-emerald-500" />
+                            <h4 className="font-bold text-slate-900 text-sm">Fraud & KYC Verification</h4>
+                          </div>
+                          <ul className="space-y-2.5">
+                            <li className="flex items-center justify-between text-xs">
+                              <span className="text-slate-600">Provider Blacklist Check</span>
+                              <span className="font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">PASSED</span>
+                            </li>
+                            <li className="flex items-center justify-between text-xs">
+                              <span className="text-slate-600">Duplicate Invoice Pattern</span>
+                              <span className="font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">CLEAR</span>
+                            </li>
+                            <li className="flex items-center justify-between text-xs">
+                              <span className="text-slate-600">Patient Identity Match</span>
+                              <span className="font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">VERIFIED</span>
+                            </li>
+                          </ul>
+                        </div>
+                        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                          <div className="flex items-center space-x-2 mb-3">
+                            <Activity className="w-4 h-4 text-indigo-500" />
+                            <h4 className="font-bold text-slate-900 text-sm">Clinical NLP Analysis</h4>
+                          </div>
+                          <ul className="space-y-2.5">
+                            <li className="flex items-center justify-between text-xs">
+                              <span className="text-slate-600">ICD-10 Code Alignment</span>
+                              <span className="font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">High Confidence</span>
+                            </li>
+                            <li className="flex items-center justify-between text-xs">
+                              <span className="text-slate-600">Duration of Stay (ALOS)</span>
+                              <span className="font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded">Standard (3 Days)</span>
+                            </li>
+                            <li className="flex items-center justify-between text-xs">
+                              <span className="text-slate-600">Surgical Notes Quality</span>
+                              <span className="font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded">Needs Review</span>
+                            </li>
+                          </ul>
+                        </div>
+                      </div>
+
                     </div>
-                    <div className="grid grid-cols-4 gap-2 text-[11px] text-slate-700 bg-white p-2.5 rounded-lg border border-indigo-100 font-mono text-center">
-                      <div>
-                        <span className="text-[9px] text-slate-400 block font-sans">SUM INSURED</span>
-                        <span className="font-bold text-indigo-900">₹{(caseDetail.policy?.sum_insured || 500000).toLocaleString()}</span>
-                      </div>
-                      <div>
-                        <span className="text-[9px] text-slate-400 block font-sans">ROOM RENT CAP</span>
-                        <span className="font-bold text-slate-800">₹{(caseDetail.policy?.room_rent_cap || 5000).toLocaleString()}/day</span>
-                      </div>
-                      <div>
-                        <span className="text-[9px] text-slate-400 block font-sans">CO-PAY</span>
-                        <span className="font-bold text-amber-700">{caseDetail.policy?.co_pay_pct || 10}%</span>
-                      </div>
-                      <div>
-                        <span className="text-[9px] text-slate-400 block font-sans">DEDUCTIBLE</span>
-                        <span className="font-bold text-slate-800">₹{(caseDetail.policy?.deductible || 5000).toLocaleString()}</span>
+
+                    {/* Right Col: Adjudication Action Panel */}
+                    <div className="space-y-6">
+                      <div className="bg-white rounded-2xl shadow-xl border border-indigo-100 overflow-hidden sticky top-6">
+                        <div className="bg-indigo-600 p-4 text-white">
+                          <h3 className="font-bold flex items-center">
+                            <CheckSquare className="w-4 h-4 mr-2 text-indigo-200" />
+                            Final Judgement
+                          </h3>
+                          <p className="text-indigo-200 text-xs mt-1">Review the AI recommendations and execute the final adjudication decision.</p>
+                        </div>
+                        <div className="p-5 space-y-5">
+                          
+                          {/* Financial Summary */}
+                          <div className="space-y-3 p-4 bg-slate-50 rounded-xl border border-slate-200">
+                            <div className="flex justify-between items-center text-sm">
+                              <span className="text-slate-500">Gross Billed</span>
+                              <span className="font-mono font-semibold text-slate-900">₹{(selectedClaim.total_claimed || 0).toLocaleString()}</span>
+                            </div>
+                            <div className="flex justify-between items-center text-sm">
+                              <span className="text-slate-500">AI Suggested Deductions</span>
+                              <span className="font-mono font-semibold text-rose-600">-₹{((selectedClaim.total_claimed || 0) - (selectedClaim.covered_amount || 0)).toLocaleString()}</span>
+                            </div>
+                            <div className="pt-2 border-t border-slate-200">
+                              <label className="block text-xs font-bold text-slate-700 mb-1">Final Approved Amount (Editable)</label>
+                              <div className="relative">
+                                <span className="absolute left-3 top-2.5 text-slate-500 font-bold">₹</span>
+                                <input
+                                  type="number"
+                                  value={finalApprovedAmount}
+                                  onChange={(e) => setFinalApprovedAmount(Number(e.target.value))}
+                                  className="w-full pl-8 pr-3 py-2 text-lg font-bold font-mono text-emerald-700 bg-white border border-emerald-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                                />
+                              </div>
+                              <p className="text-[10px] text-slate-400 mt-1">Adjust if manual override is required.</p>
+                            </div>
+                          </div>
+
+                          <div className="space-y-3">
+                            <button
+                              onClick={handleApprove}
+                              className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-extrabold flex items-center justify-center space-x-2 shadow-lg shadow-emerald-600/20 transition-all cursor-pointer"
+                            >
+                              <CheckCircle2 className="w-5 h-5" />
+                              <span>Step 3A: Approve Cashless</span>
+                            </button>
+                            <button
+                              onClick={handleReject}
+                              className="w-full py-2.5 bg-white border border-rose-200 text-rose-600 hover:bg-rose-50 rounded-xl font-bold flex items-center justify-center space-x-2 transition-all cursor-pointer"
+                            >
+                              <XCircle className="w-4 h-4" />
+                              <span>Step 3B: Reject Claim</span>
+                            </button>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                    {caseDetail.policy?.custom_fields && caseDetail.policy.custom_fields.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 pt-1">
-                        {caseDetail.policy.custom_fields.map((f, idx) => (
-                          <span key={idx} className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-white border border-indigo-200 text-indigo-800 flex items-center space-x-1">
-                            <span>{f.field_name}:</span>
-                            <span className="text-teal-700 font-mono">{f.coverage_val}</span>
-                          </span>
-                        ))}
-                      </div>
-                    )}
                   </div>
-
-                  {/* Adjudication Settlement & Claim Type Breakdown */}
-                  {(() => {
-                    const selType = getClaimType(selectedClaim);
-                    const gross = selectedClaim.total_claimed || 1;
-                    const cov = selectedClaim.covered_amount || 0;
-                    const patPayable = selectedClaim.patient_payable ?? Math.max(0, gross - cov);
-                    const covPct = Math.min(100, Math.round((cov / gross) * 100));
-                    const patPct = 100 - covPct;
-
-                    return (
-                      <div className="my-4 p-4 rounded-xl border bg-slate-50 border-slate-200 space-y-3">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <span className="text-xs font-bold text-slate-800 uppercase tracking-wide">
-                            Adjudication Settlement Summary
-                          </span>
-                          {selType === 'FULL_CLAIM' && (
-                            <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center">
-                              <Check className="w-3 h-3 mr-1" />
-                              100% Full Claim Approved
-                            </span>
-                          )}
-                          {selType === 'PARTIAL_CLAIM' && (
-                            <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 flex items-center">
-                              <AlertTriangle className="w-3 h-3 mr-1" />
-                              Partial Claim ({covPct}% Covered)
-                            </span>
-                          )}
-                          {selType === 'NO_CLAIM' && (
-                            <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-200 flex items-center">
-                              <X className="w-3 h-3 mr-1" />
-                              No Claim (Repudiated / 0% Covered)
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Financial 3-card Row */}
-                        <div className="grid grid-cols-3 gap-2.5 text-center">
-                          <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-2xs">
-                            <span className="text-[9px] text-slate-400 uppercase font-bold block">Total Claimed</span>
-                            <div className="text-sm font-extrabold text-slate-900 mt-0.5">
-                              ₹{gross.toLocaleString()}
-                            </div>
-                          </div>
-                          <div className={`p-3 rounded-lg border shadow-2xs ${
-                            selType === 'FULL_CLAIM' ? 'bg-emerald-50 border-emerald-200' :
-                            selType === 'PARTIAL_CLAIM' ? 'bg-indigo-50 border-indigo-200' :
-                            'bg-slate-100 border-slate-200'
-                          }`}>
-                            <span className="text-[9px] text-slate-500 uppercase font-bold block">Approved by Insurer</span>
-                            <div className={`text-sm font-extrabold mt-0.5 ${
-                              selType === 'NO_CLAIM' ? 'text-slate-400' : 'text-emerald-700'
-                            }`}>
-                              ₹{cov.toLocaleString()}
-                            </div>
-                          </div>
-                          <div className={`p-3 rounded-lg border shadow-2xs ${
-                            selType === 'NO_CLAIM' ? 'bg-rose-50 border-rose-200' :
-                            selType === 'PARTIAL_CLAIM' ? 'bg-amber-50 border-amber-200' :
-                            'bg-slate-50 border-slate-200'
-                          }`}>
-                            <span className="text-[9px] text-slate-500 uppercase font-bold block">Patient Share</span>
-                            <div className={`text-sm font-extrabold mt-0.5 ${
-                              selType === 'NO_CLAIM' ? 'text-rose-700' :
-                              selType === 'PARTIAL_CLAIM' ? 'text-amber-700' :
-                              'text-slate-400'
-                            }`}>
-                              ₹{patPayable.toLocaleString()}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Visual Proportional Split Bar */}
-                        <div className="space-y-1">
-                          <div className="flex items-center justify-between text-[11px] font-semibold text-slate-500">
-                            <span className="text-emerald-700 font-bold">Insurer Coverage: {covPct}%</span>
-                            <span className={selType === 'NO_CLAIM' ? 'text-rose-700 font-bold' : 'text-amber-700 font-bold'}>
-                              Patient Payable: {patPct}%
-                            </span>
-                          </div>
-                          <div className="h-2 w-full bg-slate-200 rounded-full overflow-hidden flex">
-                            <div style={{ width: `${covPct}%` }} className="bg-emerald-500 h-full transition-all" />
-                            <div style={{ width: `${patPct}%` }} className={`${selType === 'NO_CLAIM' ? 'bg-rose-500' : 'bg-amber-500'} h-full transition-all`} />
-                          </div>
-                        </div>
-
-                        {/* Official Adjudication Reason */}
-                        {selectedClaim.adjudication_reason && (
-                          <div className={`p-3 rounded-lg border text-xs leading-relaxed ${
-                            selType === 'FULL_CLAIM'
-                              ? 'bg-emerald-50 text-emerald-900 border-emerald-200'
-                              : selType === 'PARTIAL_CLAIM'
-                              ? 'bg-amber-50 text-amber-900 border-amber-200'
-                              : 'bg-rose-50 text-rose-900 border-rose-200'
-                          }`}>
-                            <span className="font-bold block mb-0.5">
-                              {selType === 'FULL_CLAIM' && '✓ Full Coverage Clearance Decision:'}
-                              {selType === 'PARTIAL_CLAIM' && '⚡ Deductions & Co-Pay Explanation:'}
-                              {selType === 'NO_CLAIM' && '✕ Official Claim Repudiation Reason:'}
-                            </span>
-                            <p>{selectedClaim.adjudication_reason}</p>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })()}
-
-                  {/* Structured Evidence & Rule Matching */}
+                </div>
+              ) : (
+                <div className="flex-1 flex flex-col items-center justify-center text-slate-400 p-8 text-center space-y-4">
+                  <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center">
+                    <FileText className="w-8 h-8 text-slate-300" />
+                  </div>
                   <div>
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
-                      Adjudication Evidence & Policy Rule Matching
-                    </h4>
-                    <div className="space-y-2 max-h-64 overflow-y-auto">
-                      {caseDetail.decisions?.map((dec) => (
-                        <div key={dec.id} className="p-3 bg-slate-50 rounded-lg border border-slate-200/80 text-xs">
-                          <div className="flex items-center justify-between font-semibold text-slate-800">
-                            <span>Rule Applied: <code className="text-indigo-700">{dec.rule_id || 'STANDARD'}</code></span>
-                            <span className={dec.decision_status === 'COVERED' ? 'text-emerald-700' : 'text-amber-800'}>
-                              {dec.decision_status}
-                            </span>
-                          </div>
-                          <p className="text-[11px] text-slate-600 mt-1">
-                            {dec.explanation}
-                          </p>
-                          <div className="mt-2 flex items-center justify-between text-[11px] text-slate-500 pt-2 border-t border-slate-200">
-                            <span>Eligible: ₹{dec.eligible_amount?.toLocaleString()}</span>
-                            <span>Covered: ₹{dec.covered_amount?.toLocaleString()}</span>
-                            <span>Patient Payable: ₹{dec.patient_payable?.toLocaleString()}</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                    <h3 className="text-lg font-bold text-slate-700">No Claim Selected</h3>
+                    <p className="text-sm mt-1 max-w-sm mx-auto">Select a pre-auth request from the inbox to initiate AI-assisted adjudication.</p>
                   </div>
                 </div>
-              </div>
-            ) : (
-              <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200 p-8 shadow-2xs text-center flex flex-col items-center justify-center space-y-4 min-h-[420px]">
-                <div className="w-16 h-16 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shadow-xs">
-                  <Shield className="w-8 h-8" />
-                </div>
-                <div className="max-w-md">
-                  <h3 className="text-base font-extrabold text-slate-900 tracking-tight">Select a Claim to Review & Acknowledge</h3>
-                  <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                    Click any inbound pre-authorization or claim from the queue to inspect patient details, linked policy rules, coverage waterfall calculations, and issue an official IRDAI NHCX acknowledgement token.
-                  </p>
-                </div>
-                {claims.length > 0 && (
-                  <button
-                    onClick={() => handleSelectClaim(claims[0])}
-                    className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-xs cursor-pointer flex items-center space-x-1.5 transition-all"
-                  >
-                    <span>Inspect First Claim ({claims[0].external_reference || claims[0].case_number})</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* TAB 2: POLICY MASTER REPOSITORY */}
-      {activeTab === 'policies' && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
-            <div>
-              <h2 className="text-sm font-bold text-slate-900">Insurance Policies & Tariff Masters</h2>
-              <p className="text-xs text-slate-500">
-                Upload and configure insurance policies with ID, room rent caps, copay %, and sum insured for hospital auto-mapping.
-              </p>
+              )}
             </div>
-            <button
-              onClick={() => setNewPolicyModal(true)}
-              className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 shadow-xs transition-all cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Upload / Register Policy</span>
-            </button>
-          </div>
+          </>
+        )}
+      </div>
 
-          <div className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200 uppercase text-[10px] tracking-wider">
-                    <th className="p-3">Policy ID</th>
-                    <th className="p-3">Plan Name & Insurer</th>
-                    <th className="p-3">Sum Insured</th>
-                    <th className="p-3">Room Rent Cap</th>
-                    <th className="p-3">ICU Cap</th>
-                    <th className="p-3">Deductible</th>
-                    <th className="p-3">Co-Pay %</th>
-                    <th className="p-3 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {policies.map((pol) => (
-                    <tr key={pol.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="p-3 font-mono font-bold text-indigo-700">
-                        {pol.policy_ref}
-                      </td>
-                      <td className="p-3">
-                        <div className="font-semibold text-slate-900">{pol.plan_name}</div>
-                        <div className="text-[11px] text-slate-500">{pol.insurer_id} • {pol.plan_type}</div>
-                        {pol.custom_fields && pol.custom_fields.length > 0 && (
-                          <div className="mt-1 flex flex-wrap gap-1">
-                            {pol.custom_fields.map((cf: any, i: number) => (
-                              <span key={i} className="text-[10px] px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-800 font-medium border border-indigo-200/60" title={cf.description}>
-                                {cf.field_name}: <strong>{cf.coverage_val}</strong>
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </td>
-                      <td className="p-3 font-semibold text-slate-900">
-                        ₹{pol.sum_insured?.toLocaleString()}
-                      </td>
-                      <td className="p-3 text-slate-700">
-                        ₹{pol.room_rent_cap?.toLocaleString()} / day
-                      </td>
-                      <td className="p-3 text-slate-700">
-                        ₹{pol.icu_rent_cap?.toLocaleString()} / day
-                      </td>
-                      <td className="p-3 text-slate-700">
-                        ₹{pol.deductible?.toLocaleString()}
-                      </td>
-                      <td className="p-3">
-                        <span className="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 font-bold">
-                          {pol.co_pay_pct}%
-                        </span>
-                      </td>
-                      <td className="p-3 text-right">
-                        <button
-                          onClick={() => handleDeletePolicy(pol.id, pol.policy_ref)}
-                          className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors cursor-pointer"
-                          title="Delete policy"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                  {policies.length === 0 && (
-                    <tr>
-                      <td colSpan={8} className="p-8 text-center text-slate-400 text-xs">
-                        No insurance policies found. Click "Upload / Register Policy" to add your first policy master.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: ISSUE PAYER ACKNOWLEDGEMENT */}
-      {ackModal && selectedClaim && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 text-xs">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+      {/* MODALS */}
+      {/* ACKNOWLEDGEMENT MODAL */}
+      {ackModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl overflow-hidden border border-slate-200">
+            <div className="bg-indigo-50 border-b border-indigo-100 p-4 flex justify-between items-center">
               <div className="flex items-center space-x-2">
-                <Award className="w-5 h-5 text-teal-600" />
-                <h3 className="text-sm font-bold text-slate-900">Issue Official Payer Acknowledgement</h3>
+                <Shield className="w-5 h-5 text-indigo-600" />
+                <h3 className="text-sm font-bold text-indigo-900">Issue NHCX Acknowledgement</h3>
               </div>
-              <button onClick={() => setAckModal(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">✕</button>
+              <button onClick={() => setAckModal(false)} className="text-indigo-400 hover:text-indigo-600"><X className="w-5 h-5" /></button>
             </div>
-
-            <form onSubmit={handleIssueAcknowledgement} className="mt-4 space-y-3.5">
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
-                <div className="text-xs font-semibold text-slate-800">
-                  Target Claim: <span className="font-mono text-indigo-700">{selectedClaim.external_reference || selectedClaim.case_number}</span>
-                </div>
-                <div className="text-[11px] text-slate-500 mt-0.5">
-                  Patient: {selectedClaim.patient_name} • Hospital: {selectedClaim.hospital_name}
-                </div>
-              </div>
-
+            <form onSubmit={handleIssueAcknowledgement} className="p-5 space-y-4">
               <div>
-                <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                  Generated NHCX Acknowledgement Token
-                </label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Acknowledgement Token (IRDAI-compliant)</label>
                 <input
                   type="text"
-                  required
+                  readOnly
                   value={ackForm.ack_token}
-                  onChange={(e) => setAckForm({ ...ackForm, ack_token: e.target.value })}
-                  className="w-full p-2 rounded-xl border border-slate-200 font-mono text-xs bg-slate-50"
+                  className="w-full p-2 text-sm bg-slate-50 border border-slate-200 rounded-lg font-mono text-slate-600"
                 />
               </div>
-
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                    Adjudication Status
-                  </label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Initial Status</label>
                   <select
                     value={ackForm.status}
                     onChange={(e) => setAckForm({ ...ackForm, status: e.target.value })}
-                    className="w-full p-2 rounded-xl border border-slate-200 text-xs"
+                    className="w-full p-2 text-sm bg-white border border-slate-300 rounded-lg text-slate-700 focus:ring-2 focus:ring-indigo-600 outline-none"
                   >
-                    <option value="APPROVED">APPROVED (Cashless Cleared)</option>
-                    <option value="QUERY_RAISED">QUERY_RAISED (Pending Info)</option>
+                    <option value="APPROVED">Adjudication In-Progress</option>
+                    <option value="QUERIED">Immediate Query</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                    Approved Amount (₹)
-                  </label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Provisioned Amount</label>
                   <input
                     type="number"
-                    required
                     value={ackForm.approved_amount}
                     onChange={(e) => setAckForm({ ...ackForm, approved_amount: Number(e.target.value) })}
-                    className="w-full p-2 rounded-xl border border-slate-200 text-xs font-bold text-emerald-700"
+                    className="w-full p-2 text-sm bg-white border border-slate-300 rounded-lg font-mono text-slate-700 focus:ring-2 focus:ring-indigo-600 outline-none"
                   />
                 </div>
               </div>
-
               <div>
-                <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                  Payer Notes & Conditions for Hospital
-                </label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Regulatory Notes</label>
                 <textarea
-                  rows={3}
                   value={ackForm.notes}
                   onChange={(e) => setAckForm({ ...ackForm, notes: e.target.value })}
-                  placeholder="Enter cashless authorization conditions..."
-                  className="w-full p-2 rounded-xl border border-slate-200 text-xs"
+                  className="w-full p-2 text-sm bg-white border border-slate-300 rounded-lg h-20 text-slate-700 focus:ring-2 focus:ring-indigo-600 outline-none"
                 />
               </div>
-
-              <div className="flex justify-end space-x-2 pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setAckModal(false)}
-                  className="px-3 py-1.5 border border-slate-200 rounded-xl text-slate-600 font-medium hover:bg-slate-50 cursor-pointer"
-                >
-                  Cancel
-                </button>
+              <div className="flex justify-end pt-2">
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-bold flex items-center space-x-1.5 shadow-xs cursor-pointer"
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold flex items-center space-x-1.5 shadow-md cursor-pointer transition-colors"
                 >
-                  <Award className="w-4 h-4" />
-                  <span>Dispatch Acknowledgement</span>
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Issue Token</span>
                 </button>
               </div>
             </form>
@@ -1003,208 +775,156 @@ export const InsurerDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* MODAL: UPLOAD NEW POLICY */}
+      {/* CREATE POLICY MODAL */}
       {newPolicyModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 text-xs max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <div className="flex items-center space-x-2">
-                <Landmark className="w-5 h-5 text-indigo-600" />
-                <h3 className="text-sm font-bold text-slate-900">Upload & Register Insurance Policy</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-3xl w-full shadow-2xl border border-slate-200 text-sm my-8">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white rounded-t-2xl z-10">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                  <Landmark className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Define Network Policy</h3>
+                  <p className="text-xs text-slate-500">Create rules for automated bill-to-policy mapping.</p>
+                </div>
               </div>
-              <button onClick={() => setNewPolicyModal(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">✕</button>
+              <button onClick={() => setNewPolicyModal(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
-            <form onSubmit={handleCreatePolicy} className="mt-4 space-y-4">
-              {/* PDF / DOCX Policy Upload Dropzone */}
-              <div className="p-3.5 bg-indigo-50/50 rounded-2xl border border-indigo-200/80 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-indigo-950 flex items-center">
-                    <FileUp className="w-4 h-4 mr-1.5 text-indigo-600" />
-                    Extract Existing Policy Document (.pdf, .docx)
-                  </span>
-                  <span className="text-[10px] bg-indigo-100 text-indigo-800 font-bold px-2 py-0.5 rounded-md">
-                    AI Policy Parser
-                  </span>
+            <form onSubmit={handleCreatePolicy} className="p-6 space-y-6">
+              
+              {/* Automated Extraction Banner */}
+              <div className="bg-indigo-50/50 border border-indigo-100 rounded-xl p-4 flex flex-col md:flex-row items-center justify-between gap-4">
+                <div className="flex items-start space-x-3">
+                  <FileUp className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="font-bold text-indigo-900 text-sm">Smart Policy Ingestion (OCR/NLP)</h4>
+                    <p className="text-xs text-indigo-700/70 mt-0.5">Upload a PDF policy document to automatically extract coverage caps and clauses.</p>
+                  </div>
                 </div>
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center gap-2 shrink-0">
                   <input
                     type="file"
-                    accept=".pdf,.docx,.txt"
-                    onChange={(e) => setPolicyFile(e.target.files?.[0] || null)}
-                    className="block w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-indigo-100 file:text-indigo-800 hover:file:bg-indigo-200 cursor-pointer"
+                    accept=".pdf,.png,.jpg"
+                    onChange={handleFileUpload}
+                    className="block w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-100 file:text-indigo-700 hover:file:bg-indigo-200 transition-colors"
                   />
-                  {policyFile && (
-                    <button
-                      type="button"
-                      onClick={handleExtractPolicyFile}
-                      disabled={extractingPolicy}
-                      className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shrink-0 flex items-center space-x-1 cursor-pointer"
-                    >
-                      <Sparkles className={`w-3.5 h-3.5 ${extractingPolicy ? 'animate-spin' : ''}`} />
-                      <span>{extractingPolicy ? 'Extracting...' : 'Extract Rules'}</span>
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={extractPolicyData}
+                    disabled={!policyFile || extractingPolicy}
+                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white text-xs font-bold rounded-lg flex items-center space-x-1 transition-colors whitespace-nowrap cursor-pointer"
+                  >
+                    {extractingPolicy ? (
+                      <span className="flex items-center"><div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-1"></div> Extracting...</span>
+                    ) : (
+                      <>
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>Extract Clauses</span>
+                      </>
+                    )}
+                  </button>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                    Policy ID / Reference *
-                  </label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Plan Name</label>
                   <input
                     type="text"
                     required
+                    value={newPolicyForm.plan_name}
+                    onChange={(e) => setNewPolicyForm({ ...newPolicyForm, plan_name: e.target.value })}
+                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Policy Master Reference</label>
+                  <input
+                    type="text"
+                    required
+                    readOnly
                     value={newPolicyForm.policy_ref}
-                    onChange={(e) => setNewPolicyForm({ ...newPolicyForm, policy_ref: e.target.value })}
-                    placeholder="e.g. POL-STAR-COMP-01"
-                    className="w-full p-2 rounded-xl border border-slate-200 font-mono text-xs"
+                    className="w-full p-2 bg-slate-100 border border-slate-200 rounded-lg text-sm font-mono text-slate-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                    Insurer Name *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={newPolicyForm.insurer_id}
-                    onChange={(e) => setNewPolicyForm({ ...newPolicyForm, insurer_id: e.target.value })}
-                    placeholder="e.g. Star Health & Allied Insurance"
-                    className="w-full p-2 rounded-xl border border-slate-200 text-xs"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                  Plan Name *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={newPolicyForm.plan_name}
-                  onChange={(e) => setNewPolicyForm({ ...newPolicyForm, plan_name: e.target.value })}
-                  placeholder="e.g. Comprehensive Family Protect Plan"
-                  className="w-full p-2 rounded-xl border border-slate-200 text-xs"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Plan Type</label>
-                  <select
-                    value={newPolicyForm.plan_type}
-                    onChange={(e) => setNewPolicyForm({ ...newPolicyForm, plan_type: e.target.value })}
-                    className="w-full p-2 rounded-xl border border-slate-200 text-xs bg-white"
-                  >
-                    <option value="COMPREHENSIVE">Comprehensive</option>
-                    <option value="BASE_HEALTH">Base Health</option>
-                    <option value="SENIOR_CITIZEN">Senior Citizen</option>
-                    <option value="CRITICAL_ILLNESS">Critical Illness</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Network Type</label>
-                  <select
-                    value={newPolicyForm.network_type}
-                    onChange={(e) => setNewPolicyForm({ ...newPolicyForm, network_type: e.target.value })}
-                    className="w-full p-2 rounded-xl border border-slate-200 text-xs bg-white"
-                  >
-                    <option value="NETWORK_PREFERRED">Network Preferred (Cashless)</option>
-                    <option value="PAN_INDIA">Pan India Open</option>
-                    <option value="TIER_1_ONLY">Tier 1 Multi-Specialty Only</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Sum Insured (₹) *</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Base Sum Insured (₹)</label>
                   <input
                     type="number"
                     required
                     value={newPolicyForm.sum_insured}
                     onChange={(e) => setNewPolicyForm({ ...newPolicyForm, sum_insured: Number(e.target.value) })}
-                    className="w-full p-2 rounded-xl border border-slate-200 text-xs font-semibold"
+                    className="w-full p-2 bg-white border border-slate-300 rounded-lg text-sm font-mono"
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Room Rent Cap / Day (₹) *</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Network Type</label>
+                  <select
+                    value={newPolicyForm.network_type}
+                    onChange={(e) => setNewPolicyForm({ ...newPolicyForm, network_type: e.target.value })}
+                    className="w-full p-2 bg-white border border-slate-300 rounded-lg text-sm"
+                  >
+                    <option value="NETWORK_PREFERRED">Preferred Provider Network (PPN)</option>
+                    <option value="NON_NETWORK">Non-Network / Reimbursement</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Room Rent Cap (₹/day)</label>
                   <input
                     type="number"
-                    required
                     value={newPolicyForm.room_rent_cap}
                     onChange={(e) => setNewPolicyForm({ ...newPolicyForm, room_rent_cap: Number(e.target.value) })}
-                    className="w-full p-2 rounded-xl border border-slate-200 text-xs font-semibold"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-2">
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-700 mb-1">ICU Cap / Day (₹)</label>
-                  <input
-                    type="number"
-                    value={newPolicyForm.icu_rent_cap}
-                    onChange={(e) => setNewPolicyForm({ ...newPolicyForm, icu_rent_cap: Number(e.target.value) })}
-                    className="w-full p-1.5 rounded-lg border border-slate-200 text-xs"
+                    className="w-full p-2 bg-white border border-slate-300 rounded-lg text-sm font-mono"
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-700 mb-1">Deductible (₹)</label>
-                  <input
-                    type="number"
-                    value={newPolicyForm.deductible}
-                    onChange={(e) => setNewPolicyForm({ ...newPolicyForm, deductible: Number(e.target.value) })}
-                    className="w-full p-1.5 rounded-lg border border-slate-200 text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-700 mb-1">Co-Pay (%)</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Base Co-Pay (%)</label>
                   <input
                     type="number"
                     value={newPolicyForm.co_pay_pct}
                     onChange={(e) => setNewPolicyForm({ ...newPolicyForm, co_pay_pct: Number(e.target.value) })}
-                    className="w-full p-1.5 rounded-lg border border-slate-200 text-xs"
+                    className="w-full p-2 bg-white border border-slate-300 rounded-lg text-sm font-mono"
                   />
                 </div>
               </div>
 
-              {/* N-Custom Fields Builder Section */}
-              <div className="pt-2 border-t border-slate-100 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-800">
-                    Custom Policy Clauses & Special Coverages ({customFields.length})
-                  </span>
+              {/* Dynamic Mapped Clauses */}
+              <div className="pt-2">
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <h4 className="font-bold text-slate-900 text-sm flex items-center">
+                      <Layers className="w-4 h-4 mr-1.5 text-indigo-500" />
+                      Dynamic Coverage Clauses
+                    </h4>
+                    <p className="text-[11px] text-slate-500">Custom mapping rules applied during AI adjudication.</p>
+                  </div>
                   <button
                     type="button"
                     onClick={() => setCustomFields([...customFields, { field_name: '', description: '', coverage_val: '' }])}
-                    className="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[11px] font-bold flex items-center cursor-pointer border border-indigo-200/60"
+                    className="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center cursor-pointer"
                   >
-                    <Plus className="w-3.5 h-3.5 mr-1" />
-                    <span>Add Custom Field</span>
+                    <Plus className="w-3 h-3 mr-1" /> Add Rule
                   </button>
                 </div>
 
-                <div className="space-y-2.5 max-h-48 overflow-y-auto pr-1">
+                <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
                   {customFields.map((field, idx) => (
-                    <div key={idx} className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2 relative">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-bold text-slate-500 uppercase">Clause #{idx + 1}</span>
-                        <button
-                          type="button"
-                          onClick={() => setCustomFields(customFields.filter((_, i) => i !== idx))}
-                          className="text-slate-400 hover:text-rose-600 cursor-pointer"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
+                    <div key={idx} className="bg-slate-50 p-3 rounded-lg border border-slate-200 grid gap-2 relative group">
+                      <button 
+                        type="button" 
+                        onClick={() => setCustomFields(customFields.filter((_, i) => i !== idx))}
+                        className="absolute right-2 top-2 p-1 text-slate-400 hover:text-rose-500 rounded bg-white border border-slate-100 shadow-xs hidden group-hover:block transition-all"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                      <div className="grid grid-cols-2 gap-2 pr-6">
                         <input
                           type="text"
-                          placeholder="Clause / Field Name (e.g. AYUSH Treatment)"
+                          placeholder="Clause Name (e.g., Maternity, Cataract)"
                           value={field.field_name}
                           onChange={(e) => {
                             const copy = [...customFields];
@@ -1215,7 +935,7 @@ export const InsurerDashboard: React.FC = () => {
                         />
                         <input
                           type="text"
-                          placeholder="Coverage Limit / Term (e.g. Up to ₹50,000)"
+                          placeholder="Coverage Limit (e.g., ₹50,000 max)"
                           value={field.coverage_val}
                           onChange={(e) => {
                             const copy = [...customFields];
@@ -1227,7 +947,7 @@ export const InsurerDashboard: React.FC = () => {
                       </div>
                       <input
                         type="text"
-                        placeholder="Description / Coverage terms..."
+                        placeholder="Description / Context for AI rules engine..."
                         value={field.description}
                         onChange={(e) => {
                           const copy = [...customFields];
@@ -1241,20 +961,20 @@ export const InsurerDashboard: React.FC = () => {
                 </div>
               </div>
 
-              <div className="flex justify-end space-x-2 pt-3 border-t border-slate-100">
+              <div className="flex justify-end space-x-2 pt-4 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setNewPolicyModal(false)}
-                  className="px-3.5 py-1.5 border border-slate-200 rounded-xl text-slate-600 font-medium hover:bg-slate-50 cursor-pointer"
+                  className="px-4 py-2 border border-slate-200 rounded-xl text-slate-600 font-bold hover:bg-slate-50 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold flex items-center space-x-1.5 shadow-xs cursor-pointer"
+                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold flex items-center space-x-1.5 shadow-md cursor-pointer transition-colors"
                 >
                   <Plus className="w-4 h-4" />
-                  <span>Register Policy Master</span>
+                  <span>Register Policy Ruleset</span>
                 </button>
               </div>
             </form>
@@ -1265,29 +985,30 @@ export const InsurerDashboard: React.FC = () => {
       {/* QUERY MODAL */}
       {queryModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl max-w-md w-full p-5 shadow-2xl border border-slate-200 text-xs">
-            <h3 className="text-sm font-bold text-slate-900 mb-2">Raise Adjudication Query</h3>
-            <p className="text-slate-500 mb-3 text-[11px]">
-              Specify missing clinical evidence, OT notes, or itemization questions required from the hospital coordinator.
+          <div className="bg-white rounded-2xl max-w-md w-full p-5 shadow-2xl border border-slate-200">
+            <h3 className="text-base font-bold text-slate-900 mb-1 flex items-center"><FileQuestion className="w-5 h-5 mr-2 text-amber-500" /> Raise Adjudication Query</h3>
+            <p className="text-slate-500 mb-4 text-xs">
+              Specify missing clinical evidence, OT notes, or itemization questions required from the hospital billing desk.
             </p>
             <textarea
               value={queryText}
               onChange={(e) => setQueryText(e.target.value)}
               placeholder="e.g. Please upload historical cardiology consultation records and ultrasound Doppler..."
-              className="w-full p-2.5 border border-slate-300 rounded-lg h-24 mb-3"
+              className="w-full p-3 border border-slate-300 rounded-xl h-28 mb-4 text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none"
             />
             <div className="flex justify-end space-x-2">
               <button
                 onClick={() => setQueryModal(false)}
-                className="px-3 py-1.5 border border-slate-300 rounded-lg text-slate-700 font-medium hover:bg-slate-50 cursor-pointer"
+                className="px-4 py-2 border border-slate-300 rounded-xl text-slate-700 font-bold hover:bg-slate-50 cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 onClick={handleRaiseQuery}
-                className="px-3 py-1.5 bg-amber-600 text-white rounded-lg font-semibold hover:bg-amber-700 cursor-pointer"
+                className="px-4 py-2 bg-amber-500 text-white rounded-xl font-bold hover:bg-amber-600 cursor-pointer flex items-center shadow-md shadow-amber-500/20"
               >
-                Send Query
+                <Send className="w-4 h-4 mr-1.5" />
+                Step 2: Submit Query
               </button>
             </div>
           </div>
@@ -1297,7 +1018,7 @@ export const InsurerDashboard: React.FC = () => {
       {/* SMS MODAL */}
       {smsModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 text-xs">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200">
             <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-100">
               <div className="flex items-center space-x-2">
                 <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
@@ -1316,9 +1037,9 @@ export const InsurerDashboard: React.FC = () => {
               </button>
             </div>
 
-            <form onSubmit={handleSendInsurerSms} className="space-y-3.5">
+            <form onSubmit={handleSendInsurerSms} className="space-y-4">
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Beneficiary Mobile Number</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Beneficiary Mobile Number</label>
                 <div className="relative">
                   <Send className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
                   <input
@@ -1327,14 +1048,14 @@ export const InsurerDashboard: React.FC = () => {
                     value={smsPhone}
                     onChange={(e) => setSmsPhone(e.target.value)}
                     placeholder="+91 98450 12345"
-                    className="w-full pl-8 pr-3 py-2 text-xs rounded-xl border border-slate-200 font-mono bg-slate-50/50"
+                    className="w-full pl-8 pr-3 py-2 text-sm rounded-xl border border-slate-200 font-mono bg-slate-50/50 focus:ring-2 focus:ring-indigo-500 outline-none"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Quick Adjudication Templates</label>
-                <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-700 mb-2">Quick Adjudication Templates</label>
+                <div className="space-y-2">
                   {[
                     `Pre-authorization approved for ₹${(selectedClaim?.covered_amount || 0).toLocaleString()}. Claim token: ${selectedClaim?.external_reference || 'ACK-2026'}.`,
                     `Query raised on claim item. Please provide discharge summary and pharmacy bill copy.`,
@@ -1345,7 +1066,7 @@ export const InsurerDashboard: React.FC = () => {
                       key={idx}
                       type="button"
                       onClick={() => setSmsBody(tmpl)}
-                      className="w-full text-left p-2 rounded-lg border border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/50 text-[11px] text-slate-700 transition-all cursor-pointer"
+                      className="w-full text-left p-2.5 rounded-xl border border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/50 text-xs text-slate-700 transition-all cursor-pointer bg-slate-50/50"
                     >
                       {tmpl}
                     </button>
@@ -1354,13 +1075,13 @@ export const InsurerDashboard: React.FC = () => {
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Custom Message Body</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Custom Message Body</label>
                 <textarea
                   required
                   rows={3}
                   value={smsBody}
                   onChange={(e) => setSmsBody(e.target.value)}
-                  className="w-full p-2.5 rounded-xl border border-slate-200 resize-none font-sans text-xs bg-slate-50/50"
+                  className="w-full p-3 rounded-xl border border-slate-200 resize-none font-sans text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
                 />
               </div>
 
@@ -1368,16 +1089,16 @@ export const InsurerDashboard: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setSmsModal(false)}
-                  className="px-3.5 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-100 font-semibold cursor-pointer"
+                  className="px-4 py-2 rounded-xl border border-slate-200 hover:bg-slate-100 font-bold text-sm cursor-pointer text-slate-700"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={smsSending}
-                  className="px-4 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold flex items-center space-x-1.5 cursor-pointer shadow-xs"
+                  className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold text-sm flex items-center space-x-1.5 cursor-pointer shadow-md"
                 >
-                  {smsSending ? <span>Sending...</span> : <><Send className="w-3.5 h-3.5" /><span>Dispatch SMS</span></>}
+                  {smsSending ? <span>Sending...</span> : <><Send className="w-4 h-4" /><span>Dispatch SMS</span></>}
                 </button>
               </div>
             </form>
@@ -1387,4 +1108,3 @@ export const InsurerDashboard: React.FC = () => {
     </div>
   );
 };
-

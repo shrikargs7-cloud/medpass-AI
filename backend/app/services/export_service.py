@@ -179,12 +179,35 @@ class TraceExportEngine:
             df_proc = pd.DataFrame(proc_data if proc_data else [{"procedure_id": "NONE"}])
             df_ins = pd.DataFrame(ins_data if ins_data else [{"insurance_event_id": "NONE"}])
 
-            # Write CSV files
+            # Write unified operational CSV
+            unified_data = []
+            for e in enc_data:
+                e_cond = [c for c in cond_data if c["encounter_key"] == e["encounter_key"]]
+                e_proc = [p for p in proc_data if p["encounter_key"] == e["encounter_key"]]
+                e_ins = [i for i in ins_data if i["encounter_key"] == e["encounter_key"]]
+                
+                cond_names = ", ".join([c.get("concept_name", "") for c in e_cond if c.get("concept_name")])
+                proc_names = ", ".join([p.get("concept_name", "") for p in e_proc if p.get("concept_name")])
+                primary_ins = e_ins[0] if e_ins else {}
+                
+                unified_data.append({
+                    "Age_Band": e.get("age_band", "Unknown"),
+                    "Gender": e.get("sex_category", "Unknown"),
+                    "City_Category": e.get("city_bucket", "Unknown"),
+                    "Hospital_Tier": e.get("facility_tier", "Unknown"),
+                    "Diagnosis": cond_names or "No Diagnosis Recorded",
+                    "Treatment": proc_names or "No Treatment Recorded",
+                    "Encounter_Type": e.get("encounter_type", "Unknown"),
+                    "Length_Of_Stay_Days": e.get("los_days", 1),
+                    "Insurance_Plan": primary_ins.get("plan_category", "Unknown"),
+                    "Billed_Amount_Bucket": primary_ins.get("amount_bucket", "Unknown"),
+                    "Covered_Amount": primary_ins.get("covered_amount", 0.0),
+                    "Patient_Payable": primary_ins.get("patient_payable", 0.0),
+                    "Insurance_Status": primary_ins.get("event_type", "Unknown")
+                })
 
-            # CSV
-            df_enc.to_csv(os.path.join(data_dir, "encounters.csv"), index=False)
-            df_cond.to_csv(os.path.join(data_dir, "conditions.csv"), index=False)
-            df_ins.to_csv(os.path.join(data_dir, "insurance_events.csv"), index=False)
+            df_unified = pd.DataFrame(unified_data if unified_data else [{"Message": "No operational data found"}])
+            df_unified.to_csv(os.path.join(data_dir, "operational_dataset.csv"), index=False)
 
             # 2. FHIR R4 NDJSON representation
             fhir_file = os.path.join(data_dir, "fhir_bundle.ndjson")
@@ -261,7 +284,7 @@ class TraceExportEngine:
                 json.dump(qual_report, f, indent=2)
 
             with open(os.path.join(tmpdir, "README.md"), "w") as f:
-                f.write(f"# Trace Commons Dataset Export\n\nVersion: {filters.dataset_version}\nExport ID: {export_job.id}\nJourney Mode: {filters.journey_mode}\n\nThis archive contains research-safe, privacy-governed longitudinal healthcare workflow records.\n")
+                f.write(f"# Operational Database Export\n\nVersion: {filters.dataset_version}\nExport ID: {export_job.id}\nJourney Mode: {filters.journey_mode}\n\nThis archive contains research-safe, privacy-governed longitudinal healthcare workflow records, free of personal identifiers.\n")
 
             # 6. Checksum generation and ZIP creation
             hasher = hashlib.sha256()

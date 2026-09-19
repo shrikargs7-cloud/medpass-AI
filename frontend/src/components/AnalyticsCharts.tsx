@@ -195,35 +195,35 @@ export const ClaimFunnelChart: React.FC<ClaimFunnelProps> = ({
   const approvedPct = Math.round((approved / safeTotal) * 100);
 
   const stages = [
-    { label: 'Total Intake', count: total, pct: 100, gradient: 'from-slate-700 to-slate-900', textColor: 'text-slate-900' },
-    { label: 'Structured & Ready', count: ready, pct: readyPct, gradient: 'from-teal-500 to-emerald-600', textColor: 'text-teal-700' },
-    { label: 'Submitted to Gateway', count: submitted, pct: submittedPct, gradient: 'from-blue-500 to-indigo-600', textColor: 'text-blue-700' },
-    { label: 'Payer Approved', count: approved, pct: approvedPct, gradient: 'from-emerald-400 to-teal-500', textColor: 'text-emerald-700' }
+    { label: 'Total Intake', count: total, pct: 100, gradient: 'from-slate-600 to-slate-800', textColor: 'text-slate-800', bg: 'bg-slate-50', border: 'border-slate-200' },
+    { label: 'Structured & Ready', count: ready, pct: readyPct, gradient: 'from-teal-400 to-emerald-500', textColor: 'text-teal-700', bg: 'bg-teal-50', border: 'border-teal-100' },
+    { label: 'Submitted to Gateway', count: submitted, pct: submittedPct, gradient: 'from-indigo-400 to-blue-500', textColor: 'text-indigo-700', bg: 'bg-indigo-50', border: 'border-indigo-100' },
+    { label: 'Payer Approved', count: approved, pct: approvedPct, gradient: 'from-emerald-500 to-green-600', textColor: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-100' }
   ];
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between text-[11px] pb-1 border-b border-slate-100">
-        <span className="flex items-center font-bold text-slate-700">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping mr-1.5 inline-block" />
-          Live Real-time Pipeline
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between text-xs pb-3 border-b border-slate-100/60">
+        <span className="flex items-center font-bold text-slate-700 uppercase tracking-widest text-[10px]">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse mr-2 inline-block shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
+          Live Active Pipeline
         </span>
-        <span className="font-mono text-slate-400 font-semibold">{total} Active Admissions</span>
+        <span className="font-mono text-slate-500 font-medium tracking-tight mt-1 sm:mt-0 bg-slate-100 px-2 py-0.5 rounded-md text-[10px]">{total} Admissions</span>
       </div>
-      <div className="space-y-2.5">
+      <div className="space-y-3">
         {stages.map((stg) => (
-          <div key={stg.label} className="text-xs">
-            <div className="flex items-center justify-between text-[11px] font-semibold text-slate-700 mb-1">
-              <span>{stg.label}</span>
-              <div className="flex items-center space-x-1.5 font-mono">
-                <span className={`font-bold ${stg.textColor}`}>{stg.count} cases</span>
-                <span className="text-[10px] text-slate-400">({stg.pct}%)</span>
+          <div key={stg.label} className={`p-3 rounded-xl border ${stg.border} ${stg.bg} transition-all duration-300 hover:shadow-sm`}>
+            <div className="flex items-center justify-between text-xs font-semibold mb-2">
+              <span className={`tracking-wide ${stg.textColor}`}>{stg.label}</span>
+              <div className="flex items-center space-x-2 font-mono">
+                <span className={`text-sm font-bold ${stg.textColor}`}>{stg.count}</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-white/60 text-slate-500 shadow-sm border border-slate-200/50">{stg.pct}%</span>
               </div>
             </div>
-            <div className="w-full bg-slate-100 rounded-lg h-3 overflow-hidden p-0.5 border border-slate-200/80">
+            <div className="w-full bg-white/60 rounded-full h-2.5 overflow-hidden shadow-inner ring-1 ring-slate-900/5">
               <div
-                className={`h-full rounded-md bg-gradient-to-r ${stg.gradient} transition-all duration-700 shadow-2xs`}
-                style={{ width: `${Math.max(6, stg.pct)}%` }}
+                className={`h-full rounded-full bg-gradient-to-r ${stg.gradient} transition-all duration-1000 ease-out shadow-sm`}
+                style={{ width: `${Math.max(2, stg.pct)}%` }}
               />
             </div>
           </div>
@@ -235,32 +235,72 @@ export const ClaimFunnelChart: React.FC<ClaimFunnelProps> = ({
 
 // 4. Blocker Category Distribution Bars
 interface BlockerDistributionProps {
-  blockers: { blocker_type: string; is_resolved?: boolean }[];
+  blockers: any[];
 }
 
 export const BlockerDistributionChart: React.FC<BlockerDistributionProps> = ({ blockers }) => {
-  const counts: Record<string, number> = {};
-  blockers.forEach((b) => {
+  // Only chart active unresolved blockers
+  const activeBlockers = blockers.filter((b) => !b.is_resolved);
+  const counts: Record<string, { count: number, severity: string }> = {};
+
+  activeBlockers.forEach((b) => {
     const key = b.blocker_type.replace(/_/g, ' ');
-    counts[key] = (counts[key] || 0) + 1;
+    if (!counts[key]) {
+      counts[key] = { count: 0, severity: b.severity || 'MEDIUM' };
+    }
+    counts[key].count += 1;
   });
 
-  const total = blockers.length || 1;
+  const total = activeBlockers.length || 1;
+  const entries = Object.entries(counts).sort((a, b) => b[1].count - a[1].count);
+
+  if (entries.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-8 text-center bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
+        <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center mb-3 shadow-sm">
+          <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7"></path></svg>
+        </div>
+        <p className="text-xs font-bold uppercase tracking-widest text-slate-600">No Active Blockers</p>
+        <p className="text-[11px] text-slate-400 mt-1 font-medium">All clinical pathways are completely clear.</p>
+      </div>
+    );
+  }
+
+  const getSeverityStyle = (severity: string) => {
+    switch (severity.toUpperCase()) {
+      case 'HIGH':
+      case 'CRITICAL':
+        return { bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-100', bar: 'from-rose-400 to-rose-600', dot: 'bg-rose-500' };
+      case 'MEDIUM':
+        return { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-100', bar: 'from-amber-400 to-orange-500', dot: 'bg-amber-500' };
+      case 'LOW':
+      default:
+        return { bg: 'bg-sky-50', text: 'text-sky-700', border: 'border-sky-100', bar: 'from-sky-400 to-blue-500', dot: 'bg-sky-500' };
+    }
+  };
 
   return (
-    <div className="space-y-2 text-xs">
-      {Object.entries(counts).map(([type, count]) => {
-        const pct = Math.round((count / total) * 100);
+    <div className="space-y-3">
+      {entries.map(([type, data]) => {
+        const pct = Math.round((data.count / total) * 100);
+        const style = getSeverityStyle(data.severity);
+
         return (
-          <div key={type}>
-            <div className="flex items-center justify-between text-[11px] text-slate-600 mb-0.5">
-              <span className="font-medium truncate">{type}</span>
-              <span className="font-mono text-slate-800 font-bold">{count} ({pct}%)</span>
+          <div key={type} className={`p-3 rounded-xl border ${style.border} ${style.bg} transition-all duration-300 hover:shadow-sm`}>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center space-x-2 truncate">
+                <span className={`w-2 h-2 rounded-full shadow-sm ${style.dot}`} />
+                <span className={`text-[11px] font-bold tracking-wide uppercase truncate ${style.text}`}>{type}</span>
+              </div>
+              <div className="flex items-center space-x-2 font-mono ml-2 shrink-0">
+                <span className={`text-sm font-bold ${style.text}`}>{data.count}</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-white/60 shadow-sm border border-slate-200/50 text-slate-500">{pct}%</span>
+              </div>
             </div>
-            <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+            <div className="w-full bg-white/60 rounded-full h-2.5 overflow-hidden shadow-inner ring-1 ring-slate-900/5">
               <div
-                className="h-full bg-rose-500 rounded-full transition-all duration-500"
-                style={{ width: `${pct}%` }}
+                className={`h-full rounded-full bg-gradient-to-r ${style.bar} transition-all duration-1000 ease-out`}
+                style={{ width: `${Math.max(2, pct)}%` }}
               />
             </div>
           </div>

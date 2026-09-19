@@ -126,7 +126,9 @@ class ChatbotService:
         stop_words = {
             "fetch", "details", "of", "the", "search", "patient", "show", "me",
             "find", "who", "is", "about", "get", "status", "case", "record", "info",
-            "information", "please", "can", "you", "check", "for", "look", "up", "a", "an"
+            "information", "please", "can", "you", "check", "for", "look", "up", "a", "an",
+            "how", "much", "what", "when", "where", "why", "coverage", "amount", "fee",
+            "bill", "rent", "room", "deduction", "policy", "claim", "total", "payable", "cost", "price"
         }
 
         # 1. Match Case Numbers directly: e.g. MED-2026-..., CASE-...
@@ -142,8 +144,12 @@ class ChatbotService:
         candidate_terms = [w for w in words if w.lower() not in stop_words and len(w) >= 3]
 
         for term in candidate_terms:
+            # Prevent substring matches inside other words (e.g. 'how' inside 'Chowdhury')
+            # Match if the name starts with the term OR contains the term after a space
             patient = db.query(Patient).filter(
-                (Patient.full_name.ilike(f"%{term}%")) | (Patient.patient_ref.ilike(f"%{term}%"))
+                (Patient.full_name.ilike(f"{term}%")) | 
+                (Patient.full_name.ilike(f"% {term}%")) | 
+                (Patient.patient_ref.ilike(f"{term}%"))
             ).first()
 
             if patient:

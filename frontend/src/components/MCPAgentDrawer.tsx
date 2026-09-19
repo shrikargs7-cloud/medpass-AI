@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Bot, X, Send, Sparkles, RefreshCw, User, FileText } from 'lucide-react';
 import { fetchMCPTools, chatMCPAgent } from '../api/client';
 import { MCPTool } from '../types';
+import ReactMarkdown from 'react-markdown';
 
 interface MCPAgentDrawerProps {
   isOpen: boolean;
@@ -162,8 +163,8 @@ export const MCPAgentDrawer: React.FC<MCPAgentDrawerProps> = ({
                       : 'bg-white border border-slate-200 text-slate-900 shadow-xs rounded-tl-xs'
                   }`}
                 >
-                  <div className="whitespace-pre-line prose prose-xs max-w-none">
-                    {m.text}
+                  <div className="prose prose-xs max-w-none prose-p:leading-relaxed prose-pre:bg-slate-100 prose-pre:text-slate-800">
+                    <ReactMarkdown>{m.text}</ReactMarkdown>
                   </div>
                 </div>
                 {m.time && (
