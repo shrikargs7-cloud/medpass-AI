@@ -11,7 +11,7 @@
 ---
 ## 📖 Overview
 
-**MedPass AI** is a comprehensive, modern healthcare workflow platform designed to bridge the gap between hospitals, insurers, and patients. It automates insurance approvals, analyzes hospital discharge blockers in real-time, and strictly adjudicates claims without hallucination. 
+**MedPass AI** is a comprehensive, modern healthcare workflow platform designed to bridge the gap between hospitals, insurers, and patients. It automates insurance approvals, analyzes hospital discharge blockers in real-time, and strictly adjudicates claims without hallucination, avoiding existing manual verification processes and speeding up evaluation, approvals and clarity for the stake holders. 
 
 In addition to operational workflows, the platform includes **Trace Commons**—an isolated, strictly-governed database engine that converts live hospital data into 100% anonymous, highly-monetizable operational datasets for researchers and underwriters, fully compliant with the DPDP Act 2023.
 
@@ -151,7 +151,79 @@ A modular, API-first stack for insurance authorization, discharge intelligence, 
 | **Deployment** | Render / Vercel | Host web apps, APIs and database | Cloud deployment path for MVP/demo |
 
 ---
+---
 
+# 🌍 Scale of Impact
+
+MedPass AI is designed to create measurable impact across the entire healthcare insurance ecosystem—from patients and hospitals to insurers and research organizations. Instead of improving just one workflow, it streamlines the complete insurance authorization, discharge, and healthcare data lifecycle.
+
+<div align="center">
+
+| 👥 Stakeholders | 🎯 Primary Impact |
+|-----------------|------------------|
+| 🧑‍⚕️ Patients | Transparent insurance journey and financial clarity |
+| 🏥 Hospitals | Faster discharge coordination and reduced manual work |
+| 🛡️ Insurers / TPAs | Structured claims with fewer review delays |
+| 🔬 Research & Analytics | Anonymous longitudinal healthcare datasets through Trace Commons |
+
+</div>
+
+---
+
+## 🧑‍⚕️ Patients
+
+Empowering patients with transparency throughout the insurance and discharge process.
+
+| Impact Area | Benefit |
+|-------------|---------|
+| 🛡️ Insurance Transparency | View real-time insurance approval, rejection, and pending claim status. |
+| 💰 Financial Visibility | Understand covered amount, co-pay, deductible, and remaining payable amount before discharge. |
+| 📄 Reduced Document Requests | Avoid repeatedly submitting the same insurance or hospital documents. |
+| 📋 Actionable Guidance | Receive clear next steps for pending approvals, missing documents, or insurer queries. |
+| ✅ Discharge Readiness | Know exactly what is blocking discharge and what actions remain. |
+
+---
+
+## 🏥 Hospitals
+
+Reducing operational burden and improving insurance workflow efficiency.
+
+| Operational Challenge | MedPass AI Impact |
+|-----------------------|-------------------|
+| 📑 Manual Insurance Coordination | Automates insurance verification, claim tracking, and communication workflows. |
+| ⚠️ Missing Documentation | Instantly identifies incomplete medical or billing information before submission. |
+| 💵 Patient Liability Visibility | Clearly separates insurer-payable and patient-payable charges. |
+| 🚦 Case Prioritization | Highlights urgent pre-authorizations, discharge blockers, and pending insurer actions. |
+| 📊 Auditability | Maintains structured audit trails for every insurance workflow and decision. |
+
+---
+
+## 🛡️ Insurers / TPAs
+
+Improving claim quality and enabling faster adjudication.
+
+| Workflow Improvement | Benefit |
+|----------------------|---------|
+| 📂 Cleaner Claim Submissions | Standardized medical bills, discharge summaries, and supporting evidence. |
+| 🧾 Structured Evidence Extraction | OCR + AI converts unstructured documents into machine-readable claim data. |
+| ❓ Fewer Avoidable Queries | Detects missing fields before claims reach insurer review. |
+| ⚙️ Consistent Review Workflows | Deterministic policy engine applies the same validation rules for every case. |
+| 📈 Operational Analytics | Monitor approval rates, rejection reasons, turnaround time, and workflow bottlenecks. |
+
+---
+
+| 📍 Impact Dimension | 🚀 Outcome |
+|--------------------|------------|
+| **Patient Experience** | Transparent insurance journey with fewer delays. |
+| **Hospital Operations** | Reduced manual coordination and faster discharge processing. |
+| **Insurance Processing** | Higher-quality claims and faster adjudication workflows. |
+| **Healthcare Data Intelligence** | Anonymous longitudinal datasets for research and analytics through Trace Commons. |
+
+</div>
+
+---
+
+> 
 ## ⚙️ CI/CD Pipeline & Deployment
 
 This project includes a fully automated Continuous Integration & Continuous Deployment (CI/CD) pipeline via **GitHub Actions**.
