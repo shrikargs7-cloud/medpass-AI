@@ -170,7 +170,7 @@ A modular, API-first stack for insurance authorization, discharge intelligence, 
 | **Deployment** | Render / Vercel | Host web apps, APIs and database | Cloud deployment path for MVP/demo |
 
 ---
----
+
 
 # 🌍 Scale of Impact
 
