@@ -47,7 +47,78 @@ In addition to operational workflows, the platform includes **Trace Commons**—
 
 ## 🏗 System Architecture
 
-![System Architecture](docs/architecture.jpg)
+```mermaid
+flowchart TB
+    classDef secure fill:#e0f2fe,stroke:#0369a1,stroke-width:2px;
+    classDef op fill:#f0fdf4,stroke:#15803d,stroke-width:2px;
+    classDef trace fill:#fdf4ff,stroke:#a21caf,stroke-width:2px;
+    classDef external fill:#f3f4f6,stroke:#374151,stroke-width:2px;
+    classDef extBox fill:#f9fafb,stroke:#d1d5db,stroke-width:1px,stroke-dasharray: 5 5;
+
+    %% STAKEHOLDERS
+    subgraph Stakeholders ["Users & Stakeholders"]
+        H[🏥 Hospitals] 
+        I[🛡️ Insurers] 
+        P[🧑‍⚕️ Patients] 
+        R[🔬 Researchers]
+    end
+
+    %% EXTERNAL
+    subgraph Ext ["External Integrations"]
+        EMR[Hospital EMR/FHIR]:::external
+        TPA[Insurer / TPA API]:::external
+        NHCX[NHCX India]:::external
+    end
+
+    %% MEDPASS OPERATIONAL
+    subgraph MedPass ["MedPass AI Platform (Operational)"]
+        direction TB
+        
+        subgraph Frontend ["Frontend (Web)"]
+            Dash[Role-Based Dashboards<br/>React + TypeScript]
+            Viz[Charts & Analytics]
+        end
+
+        subgraph Backend ["Backend Services (FastAPI)"]
+            CE[Case & State Engine]
+            PE[Policy & Coverage Engine]
+            Calc[Financial Waterfall]
+            DI[Discharge Intelligence]
+            Doc[Document OCR Parsing]
+        end
+
+        subgraph Database ["Operational Database"]
+            PG[(Supabase PostgreSQL)]
+            Auth[Auth & Privacy RLS]
+        end
+    end
+
+    %% TRACE COMMONS
+    subgraph TraceCommons ["Trace Commons (Data Layer)"]
+        direction LR
+        Ingest[Event Ingestion]:::trace --> Std[FHIR Standardization]:::trace
+        Std --> DeID[Presidio De-identification]:::trace
+        DeID --> DQ[Data Quality]:::trace
+        DQ --> Storage[(DuckDB + Parquet)]:::trace
+        Storage --> Export[CSV / Parquet Export]:::trace
+    end
+
+    %% FLOWS
+    H & I & P -- "Secure Access (JWT)" --> Dash
+    Dash --> Backend
+    Backend <--> PG
+    Backend <--> Auth
+    Backend <--> Ext
+    
+    Backend -- "Transactional Outbox Events" --> Ingest
+    
+    R -. "Access De-identified Data" .-> Export
+    
+    Export --> ML[Future ML Models]:::trace
+    Export --> Analytics[Research Analytics]:::trace
+
+    class Stakeholders,Dash,Viz,CE,PE,Calc,DI,Doc,PG,Auth secure;
+```
 
 ---
 
