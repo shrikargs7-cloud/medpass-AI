@@ -29,18 +29,25 @@ from backend.app.routers import sms
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: create all tables
+    # Startup: create all tables and ensure columns
     Base.metadata.create_all(bind=engine)
     try:
+        from scripts.seed_mock_claims import ensure_columns, seed_claims
+        ensure_columns()
         with SessionLocal() as db:
-            from backend.app.models.operational import Case
+            from backend.app.models.operational import Case, Claim
             if db.query(Case).count() == 0:
                 print("Fresh database detected: auto-seeding golden demo cases and trace data...")
                 from scripts.seed_demo import seed as seed_demo
                 from scripts.seed_trace import seed_trace_population
                 seed_demo()
                 seed_trace_population(100)
+                seed_claims()
                 print("Auto-seeding completed successfully!")
+            elif db.query(Claim).count() == 0:
+                print("Cases detected but claims table empty: seeding Full, Partial, and No Claims...")
+                seed_claims()
+                print("Mock claims seeded successfully!")
     except Exception as e:
         print(f"Auto-seed notification: {e}")
     yield

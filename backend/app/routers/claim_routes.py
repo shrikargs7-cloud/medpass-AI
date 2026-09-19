@@ -27,28 +27,99 @@ class ClaimAcknowledgeAction(BaseModel):
     notes: Optional[str] = None
 
 @router.get("")
-def list_claims(status: Optional[str] = None, db: Session = Depends(get_db)):
+def list_claims(status: Optional[str] = None, claim_type: Optional[str] = None, db: Session = Depends(get_db)):
     q = db.query(Claim)
     if status:
         q = q.filter(Claim.status == status)
+    if claim_type:
+        q = q.filter(Claim.claim_type == claim_type)
     claims = q.order_by(Claim.submitted_at.desc()).all()
 
-    return [
-        {
+    results = []
+    for c in claims:
+        ctype = c.claim_type
+        if not ctype:
+            if c.status == "REJECTED" or (c.covered_amount or 0.0) == 0.0:
+                ctype = "NO_CLAIM"
+            elif c.status == "APPROVED" and (c.covered_amount or 0.0) >= (c.total_claimed or 0.0):
+                ctype = "FULL_CLAIM"
+            elif (c.covered_amount or 0.0) > 0.0 and (c.covered_amount or 0.0) < (c.total_claimed or 0.0):
+                ctype = "PARTIAL_CLAIM"
+            else:
+                ctype = "PENDING"
+
+        ctype_label = {
+            "FULL_CLAIM": "Full Claim (100% Covered)",
+            "PARTIAL_CLAIM": "Partial Claim (Deductions)",
+            "NO_CLAIM": "No Claim (Rejected / Denied)",
+            "PENDING": "Under Review"
+        }.get(ctype, ctype)
+
+        results.append({
             "id": c.id,
             "case_id": c.case_id,
             "case_number": c.case.case_number if c.case else "N/A",
             "hospital_name": c.case.hospital.name if (c.case and c.case.hospital) else "N/A",
             "patient_name": c.case.patient.full_name if (c.case and c.case.patient) else "N/A",
+            "primary_diagnosis": f"{c.case.primary_diagnosis_code or ''} - {c.case.primary_diagnosis_name or ''}" if c.case else "N/A",
             "external_reference": c.external_reference,
+            "ack_token": c.ack_token or (c.external_reference if (c.external_reference and "ACK" in c.external_reference) else None),
             "status": c.status,
-            "total_claimed": c.total_claimed,
-            "covered_amount": c.covered_amount,
+            "claim_type": ctype,
+            "claim_type_label": ctype_label,
+            "adjudication_reason": c.adjudication_reason,
+            "total_claimed": c.total_claimed or 0.0,
+            "covered_amount": c.covered_amount or 0.0,
+            "patient_payable": c.patient_payable if c.patient_payable is not None else max(0.0, (c.total_claimed or 0.0) - (c.covered_amount or 0.0)),
             "submitted_at": c.submitted_at,
+            "decided_at": c.decided_at,
             "queries_count": len(c.queries or [])
-        }
-        for c in claims
-    ]
+        })
+
+    return results
+
+@router.get("/{claim_id}")
+def get_claim(claim_id: str, db: Session = Depends(get_db)):
+    c = db.query(Claim).filter((Claim.id == claim_id) | (Claim.external_reference == claim_id)).first()
+    if not c:
+        raise HTTPException(status_code=404, detail="Claim not found")
+
+    ctype = c.claim_type
+    if not ctype:
+        if c.status == "REJECTED" or (c.covered_amount or 0.0) == 0.0:
+            ctype = "NO_CLAIM"
+        elif c.status == "APPROVED" and (c.covered_amount or 0.0) >= (c.total_claimed or 0.0):
+            ctype = "FULL_CLAIM"
+        elif (c.covered_amount or 0.0) > 0.0 and (c.covered_amount or 0.0) < (c.total_claimed or 0.0):
+            ctype = "PARTIAL_CLAIM"
+        else:
+            ctype = "PENDING"
+
+    return {
+        "id": c.id,
+        "case_id": c.case_id,
+        "case_number": c.case.case_number if c.case else "N/A",
+        "hospital_name": c.case.hospital.name if (c.case and c.case.hospital) else "N/A",
+        "patient_name": c.case.patient.full_name if (c.case and c.case.patient) else "N/A",
+        "primary_diagnosis": f"{c.case.primary_diagnosis_code or ''} - {c.case.primary_diagnosis_name or ''}" if c.case else "N/A",
+        "external_reference": c.external_reference,
+        "ack_token": c.ack_token or (c.external_reference if (c.external_reference and "ACK" in c.external_reference) else None),
+        "status": c.status,
+        "claim_type": ctype,
+        "claim_type_label": {
+            "FULL_CLAIM": "Full Claim (100% Covered)",
+            "PARTIAL_CLAIM": "Partial Claim (Deductions)",
+            "NO_CLAIM": "No Claim (Rejected / Denied)",
+            "PENDING": "Under Review"
+        }.get(ctype, ctype),
+        "adjudication_reason": c.adjudication_reason,
+        "total_claimed": c.total_claimed or 0.0,
+        "covered_amount": c.covered_amount or 0.0,
+        "patient_payable": c.patient_payable if c.patient_payable is not None else max(0.0, (c.total_claimed or 0.0) - (c.covered_amount or 0.0)),
+        "submitted_at": c.submitted_at,
+        "decided_at": c.decided_at,
+        "queries_count": len(c.queries or [])
+    }
 
 @router.post("/{claim_id}/query")
 def raise_claim_query(claim_id: str, payload: ClaimQueryCreate, db: Session = Depends(get_db)):

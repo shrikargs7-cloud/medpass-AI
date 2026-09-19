@@ -90,13 +90,23 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
         <div>
           <div className="flex items-center space-x-2">
             <span className="text-xs font-mono font-bold text-slate-500">{patientCase.case_number}</span>
-            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-              patientCase.authorization_status === 'APPROVED'
-                ? 'bg-emerald-100 text-emerald-800'
-                : 'bg-amber-100 text-amber-800'
-            }`}>
-              {patientCase.authorization_status === 'APPROVED' ? '✓ CLAIM APPROVED' : 'UNDER REVIEW'}
-            </span>
+            {patientCase.authorization_status === 'REJECTED' || (patientCase.total_gross > 0 && patientCase.total_covered === 0) ? (
+              <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-200">
+                ✕ NO CLAIM (REJECTED / 0% COVERAGE)
+              </span>
+            ) : percentCovered === 100 ? (
+              <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                ✓ FULL CLAIM (100% COVERED)
+              </span>
+            ) : percentCovered > 0 ? (
+              <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                ⚡ PARTIAL CLAIM ({percentCovered}% COVERED)
+              </span>
+            ) : (
+              <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-800 border border-slate-200">
+                UNDER REVIEW
+              </span>
+            )}
           </div>
           <h1 className="text-xl font-black text-slate-900 mt-1">
             {patient.full_name}
@@ -248,29 +258,53 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
             <span className="text-[10px] text-slate-400 mt-1">All clinical items included</span>
           </div>
 
-          <div className="bg-emerald-50/70 p-4 rounded-2xl border border-emerald-200 shadow-2xs flex flex-col justify-center">
-            <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider flex items-center">
-              <ShieldCheck className="w-3.5 h-3.5 mr-1 text-emerald-600" />
+          <div className={`${
+            percentCovered === 0 || patientCase.authorization_status === 'REJECTED'
+              ? 'bg-rose-50/70 border-rose-200'
+              : 'bg-emerald-50/70 border-emerald-200'
+          } p-4 rounded-2xl border shadow-2xs flex flex-col justify-center`}>
+            <span className={`text-[10px] font-bold ${
+              percentCovered === 0 || patientCase.authorization_status === 'REJECTED' ? 'text-rose-800' : 'text-emerald-800'
+            } uppercase tracking-wider flex items-center`}>
+              <ShieldCheck className={`w-3.5 h-3.5 mr-1 ${percentCovered === 0 || patientCase.authorization_status === 'REJECTED' ? 'text-rose-600' : 'text-emerald-600'}`} />
               Insurance Covered
             </span>
-            <div className="text-2xl font-black text-emerald-700 font-mono mt-1">
+            <div className={`text-2xl font-black ${
+              percentCovered === 0 || patientCase.authorization_status === 'REJECTED' ? 'text-rose-700' : 'text-emerald-700'
+            } font-mono mt-1`}>
               ₹{patientCase.total_covered.toLocaleString('en-IN')}
             </div>
-            <span className="text-[10px] text-emerald-700 font-medium mt-1">
-              {percentCovered}% Cashless Settlement
+            <span className={`text-[10px] ${
+              percentCovered === 0 || patientCase.authorization_status === 'REJECTED' ? 'text-rose-700 font-semibold' : 'text-emerald-700 font-medium'
+            } mt-1`}>
+              {percentCovered === 0 || patientCase.authorization_status === 'REJECTED'
+                ? '0% Repudiated / No Coverage'
+                : `${percentCovered}% Cashless Settlement`}
             </span>
           </div>
 
-          <div className="col-span-2 bg-amber-50/70 p-4 rounded-2xl border border-amber-200 shadow-2xs flex items-center justify-between">
+          <div className={`col-span-2 ${
+            percentCovered === 0 || patientCase.authorization_status === 'REJECTED'
+              ? 'bg-rose-50/70 border-rose-200'
+              : 'bg-amber-50/70 border-amber-200'
+          } p-4 rounded-2xl border shadow-2xs flex items-center justify-between`}>
             <div>
-              <span className="text-[10px] font-bold text-amber-900 uppercase tracking-wider">
+              <span className={`text-[10px] font-bold ${
+                percentCovered === 0 || patientCase.authorization_status === 'REJECTED' ? 'text-rose-900' : 'text-amber-900'
+              } uppercase tracking-wider`}>
                 Patient Out-of-Pocket Due at Discharge
               </span>
-              <div className="text-2xl font-black text-amber-800 font-mono mt-0.5">
+              <div className={`text-2xl font-black ${
+                percentCovered === 0 || patientCase.authorization_status === 'REJECTED' ? 'text-rose-800' : 'text-amber-800'
+              } font-mono mt-0.5`}>
                 ₹{patientCase.total_patient_payable.toLocaleString('en-IN')}
               </div>
             </div>
-            <span className="text-[11px] font-bold px-3 py-1 rounded-xl bg-amber-200/80 text-amber-900">
+            <span className={`text-[11px] font-bold px-3 py-1 rounded-xl ${
+              percentCovered === 0 || patientCase.authorization_status === 'REJECTED'
+                ? 'bg-rose-200/80 text-rose-900'
+                : 'bg-amber-200/80 text-amber-900'
+            }`}>
               {100 - percentCovered}% Your Share
             </span>
           </div>

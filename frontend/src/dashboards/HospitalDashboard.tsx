@@ -643,9 +643,25 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
 
                       <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-slate-100 text-[11px]">
                         <span className="text-slate-600 font-medium font-mono">₹{c.total_gross?.toLocaleString('en-IN')}</span>
-                        <span className="font-semibold text-teal-700 px-1.5 py-0.2 rounded bg-teal-50 text-[10px]">
-                          {c.case_status}
-                        </span>
+                        <div className="flex items-center space-x-1">
+                          {c.authorization_status === 'REJECTED' || c.case_status === 'REJECTED' ? (
+                            <span className="font-semibold text-rose-700 px-1.5 py-0.2 rounded bg-rose-50 border border-rose-200 text-[10px]">
+                              No Claim
+                            </span>
+                          ) : (c.total_gross > 0 && c.total_covered >= c.total_gross) ? (
+                            <span className="font-semibold text-emerald-700 px-1.5 py-0.2 rounded bg-emerald-50 border border-emerald-200 text-[10px]">
+                              Full Claim
+                            </span>
+                          ) : (c.total_covered > 0 && c.total_covered < c.total_gross) ? (
+                            <span className="font-semibold text-amber-700 px-1.5 py-0.2 rounded bg-amber-50 border border-amber-200 text-[10px]">
+                              Partial Claim
+                            </span>
+                          ) : (
+                            <span className="font-semibold text-teal-700 px-1.5 py-0.2 rounded bg-teal-50 text-[10px]">
+                              {c.case_status}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   );
@@ -658,14 +674,23 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
           <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs">
             <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3 flex items-center">
               <BarChart2 className="w-3.5 h-3.5 mr-1 text-teal-600" />
-              Claim Pipeline Funnel
+              Preauth Pipeline
             </h4>
             <ClaimFunnelChart
               total={cases.length}
-              ready={readyCount}
+              ready={cases.filter((c) => c.readiness_score >= 85).length}
               submitted={cases.filter((c) => c.case_status === 'SUBMITTED' || c.case_status === 'APPROVED').length}
               approved={cases.filter((c) => c.case_status === 'APPROVED').length}
             />
+          </div>
+
+          {/* Blocker Category Distribution Chart */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3 flex items-center">
+              <ShieldAlert className="w-3.5 h-3.5 mr-1 text-rose-600" />
+              Discharge Blockers by Severity
+            </h4>
+            <BlockerDistributionChart blockers={cases.flatMap((c) => c.blockers || [])} />
           </div>
         </div>
 
@@ -676,7 +701,7 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
             <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs">
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div>
-                  <div className="flex items-center space-x-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <h2 className="text-lg font-bold text-slate-900 font-mono">{selectedCase.case_number}</h2>
                     <span className="text-xs font-semibold px-2 py-0.5 rounded bg-teal-100 text-teal-800">
                       {selectedCase.case_status}
@@ -684,6 +709,19 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
                     <span className="text-xs font-medium px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-mono">
                       Auth: {selectedCase.authorization_status}
                     </span>
+                    {selectedCase.authorization_status === 'REJECTED' || selectedCase.case_status === 'REJECTED' ? (
+                      <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-200">
+                        🔴 No Claim (Denied / 0%)
+                      </span>
+                    ) : (selectedCase.total_gross > 0 && selectedCase.total_covered >= selectedCase.total_gross) ? (
+                      <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                        🟢 Full Claim (100% Covered)
+                      </span>
+                    ) : (selectedCase.total_covered > 0 && selectedCase.total_covered < selectedCase.total_gross) ? (
+                      <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                        🟡 Partial Claim ({Math.round(((selectedCase.total_covered || 0) / (selectedCase.total_gross || 1)) * 100)}% Covered)
+                      </span>
+                    ) : null}
                   </div>
 
                   <p className="text-xs font-semibold text-slate-700 mt-1">

@@ -3,7 +3,7 @@ import {
   Shield, CheckCircle2, AlertTriangle, XCircle, FileText,
   Clock, ArrowUpRight, ArrowRight, Search, Eye, MessageSquare, Plus,
   Trash2, Award, CheckSquare, Layers, Building2, Landmark, Send, X,
-  FileUp, Sparkles
+  FileUp, Sparkles, Check
 } from 'lucide-react';
 import { ClaimItem, CaseDetail } from '../types';
 import {
@@ -78,6 +78,18 @@ export const InsurerDashboard: React.FC = () => {
   // Policy Document File Upload State
   const [policyFile, setPolicyFile] = useState<File | null>(null);
   const [extractingPolicy, setExtractingPolicy] = useState(false);
+
+  // Claim Type Filter (All, Full Claim, Partial Claim, No Claim)
+  const [claimTypeFilter, setClaimTypeFilter] = useState<'ALL' | 'FULL_CLAIM' | 'PARTIAL_CLAIM' | 'NO_CLAIM'>('ALL');
+
+  const getClaimType = (cl: ClaimItem): 'FULL_CLAIM' | 'PARTIAL_CLAIM' | 'NO_CLAIM' => {
+    if (cl.claim_type === 'FULL_CLAIM' || cl.claim_type === 'PARTIAL_CLAIM' || cl.claim_type === 'NO_CLAIM') {
+      return cl.claim_type as any;
+    }
+    if (cl.status === 'REJECTED' || (cl.covered_amount || 0) === 0) return 'NO_CLAIM';
+    if (cl.status === 'APPROVED' && (cl.covered_amount || 0) >= (cl.total_claimed || 0)) return 'FULL_CLAIM';
+    return 'PARTIAL_CLAIM';
+  };
 
   const loadData = async () => {
     try {
@@ -250,6 +262,15 @@ export const InsurerDashboard: React.FC = () => {
   const approvedCount = claims.filter((c) => c.status === 'APPROVED').length;
   const rejectedCount = claims.filter((c) => c.status === 'REJECTED').length;
 
+  const fullClaimCount = claims.filter((c) => getClaimType(c) === 'FULL_CLAIM').length;
+  const partialClaimCount = claims.filter((c) => getClaimType(c) === 'PARTIAL_CLAIM').length;
+  const noClaimCount = claims.filter((c) => getClaimType(c) === 'NO_CLAIM').length;
+
+  const filteredClaims = claims.filter((c) => {
+    if (claimTypeFilter === 'ALL') return true;
+    return getClaimType(c) === claimTypeFilter;
+  });
+
   return (
     <div className="space-y-6 font-sans">
       {notification && (
@@ -273,7 +294,7 @@ export const InsurerDashboard: React.FC = () => {
               </span>
             </div>
             <p className="text-xs text-slate-400">
-              Manage insurance policy masters, review hospital admissions, and issue cashless pre-authorization acknowledgements.
+              Manage insurance policy masters, review hospital admissions, and adjudicate Full Claims, Partial Claims, and Repudiations.
             </p>
           </div>
         </div>
@@ -315,23 +336,70 @@ export const InsurerDashboard: React.FC = () => {
       {/* TAB 1: ADJUDICATION & CLAIMS */}
       {activeTab === 'adjudication' && (
         <div className="space-y-6">
-          {/* KPI Row */}
+          {/* Claim Types KPI Row */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
-              <span className="text-xs font-medium text-slate-500">Awaiting Adjudication</span>
-              <div className="text-2xl font-bold text-slate-900 mt-1">{submittedCount}</div>
+            <div
+              onClick={() => setClaimTypeFilter('ALL')}
+              className={`p-4 rounded-xl border transition-all cursor-pointer ${
+                claimTypeFilter === 'ALL'
+                  ? 'bg-indigo-50/70 border-indigo-300 ring-2 ring-indigo-500 shadow-xs'
+                  : 'bg-white border-slate-200 shadow-2xs hover:border-slate-300'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-slate-500">Total Claims</span>
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">All Types</span>
+              </div>
+              <div className="text-2xl font-bold text-slate-900 mt-1">{claims.length}</div>
+              <div className="text-[11px] text-slate-400 mt-0.5">{submittedCount} awaiting adjudication</div>
             </div>
-            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
-              <span className="text-xs font-medium text-slate-500">Query Raised</span>
-              <div className="text-2xl font-bold text-amber-600 mt-1">{queriedCount}</div>
+
+            <div
+              onClick={() => setClaimTypeFilter('FULL_CLAIM')}
+              className={`p-4 rounded-xl border transition-all cursor-pointer ${
+                claimTypeFilter === 'FULL_CLAIM'
+                  ? 'bg-emerald-50 border-emerald-300 ring-2 ring-emerald-500 shadow-xs'
+                  : 'bg-white border-slate-200 shadow-2xs hover:border-slate-300'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-emerald-800">Full Claims (100%)</span>
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">Zero Deductible</span>
+              </div>
+              <div className="text-2xl font-bold text-emerald-600 mt-1">{fullClaimCount}</div>
+              <div className="text-[11px] text-emerald-700/80 mt-0.5">100% cashless covered</div>
             </div>
-            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
-              <span className="text-xs font-medium text-slate-500">Approved Claims</span>
-              <div className="text-2xl font-bold text-emerald-600 mt-1">{approvedCount}</div>
+
+            <div
+              onClick={() => setClaimTypeFilter('PARTIAL_CLAIM')}
+              className={`p-4 rounded-xl border transition-all cursor-pointer ${
+                claimTypeFilter === 'PARTIAL_CLAIM'
+                  ? 'bg-amber-50 border-amber-300 ring-2 ring-amber-500 shadow-xs'
+                  : 'bg-white border-slate-200 shadow-2xs hover:border-slate-300'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-amber-800">Partial Claims</span>
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">Co-pay / Capping</span>
+              </div>
+              <div className="text-2xl font-bold text-amber-600 mt-1">{partialClaimCount}</div>
+              <div className="text-[11px] text-amber-700/80 mt-0.5">Room cap & co-pay applied</div>
             </div>
-            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
-              <span className="text-xs font-medium text-slate-500">Rejected Claims</span>
-              <div className="text-2xl font-bold text-rose-600 mt-1">{rejectedCount}</div>
+
+            <div
+              onClick={() => setClaimTypeFilter('NO_CLAIM')}
+              className={`p-4 rounded-xl border transition-all cursor-pointer ${
+                claimTypeFilter === 'NO_CLAIM'
+                  ? 'bg-rose-50 border-rose-300 ring-2 ring-rose-500 shadow-xs'
+                  : 'bg-white border-slate-200 shadow-2xs hover:border-slate-300'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-rose-800">No Claim (Denied)</span>
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-100 text-rose-800">Repudiated</span>
+              </div>
+              <div className="text-2xl font-bold text-rose-600 mt-1">{noClaimCount}</div>
+              <div className="text-[11px] text-rose-700/80 mt-0.5">Excluded / Waiting Period</div>
             </div>
           </div>
 
@@ -339,16 +407,67 @@ export const InsurerDashboard: React.FC = () => {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             {/* Queue List */}
             <div className="lg:col-span-5 bg-white rounded-xl border border-slate-200 p-4 shadow-2xs">
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center justify-between mb-2">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
                   Inbound Claims & Preauth Queue
                 </h3>
-                <span className="text-[11px] text-slate-400 font-mono">{claims.length} cases</span>
+                <span className="text-[11px] text-slate-400 font-mono">
+                  Showing {filteredClaims.length} of {claims.length}
+                </span>
+              </div>
+
+              {/* Claim Type Filter Pills */}
+              <div className="flex flex-wrap gap-1.5 mb-3 p-1 bg-slate-50 rounded-xl border border-slate-200 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setClaimTypeFilter('ALL')}
+                  className={`flex-1 py-1 px-1.5 rounded-lg font-bold text-center transition-all cursor-pointer text-[11px] ${
+                    claimTypeFilter === 'ALL'
+                      ? 'bg-white text-slate-900 shadow-2xs border border-slate-200'
+                      : 'text-slate-500 hover:text-slate-900'
+                  }`}
+                >
+                  All ({claims.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setClaimTypeFilter('FULL_CLAIM')}
+                  className={`flex-1 py-1 px-1.5 rounded-lg font-bold text-center transition-all cursor-pointer text-[11px] ${
+                    claimTypeFilter === 'FULL_CLAIM'
+                      ? 'bg-emerald-600 text-white shadow-2xs'
+                      : 'text-emerald-700 hover:bg-emerald-100/50'
+                  }`}
+                >
+                  Full ({fullClaimCount})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setClaimTypeFilter('PARTIAL_CLAIM')}
+                  className={`flex-1 py-1 px-1.5 rounded-lg font-bold text-center transition-all cursor-pointer text-[11px] ${
+                    claimTypeFilter === 'PARTIAL_CLAIM'
+                      ? 'bg-amber-600 text-white shadow-2xs'
+                      : 'text-amber-700 hover:bg-amber-100/50'
+                  }`}
+                >
+                  Partial ({partialClaimCount})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setClaimTypeFilter('NO_CLAIM')}
+                  className={`flex-1 py-1 px-1.5 rounded-lg font-bold text-center transition-all cursor-pointer text-[11px] ${
+                    claimTypeFilter === 'NO_CLAIM'
+                      ? 'bg-rose-600 text-white shadow-2xs'
+                      : 'text-rose-700 hover:bg-rose-100/50'
+                  }`}
+                >
+                  No Claim ({noClaimCount})
+                </button>
               </div>
 
               <div className="space-y-2 max-h-[620px] overflow-y-auto pr-1">
-                {claims.map((cl) => {
+                {filteredClaims.map((cl) => {
                   const isSelected = selectedClaim?.id === cl.id;
+                  const cType = getClaimType(cl);
                   let statusBadge = 'bg-slate-100 text-slate-700';
                   if (cl.status === 'APPROVED') statusBadge = 'bg-emerald-100 text-emerald-800';
                   else if (cl.status === 'QUERIED' || cl.status === 'QUERY_RAISED') statusBadge = 'bg-amber-100 text-amber-800';
@@ -367,9 +486,24 @@ export const InsurerDashboard: React.FC = () => {
                       <div className="flex items-center justify-between text-xs">
                         <span className="font-mono font-bold text-slate-800">{cl.external_reference || cl.case_number}</span>
                         <div className="flex items-center space-x-1.5">
+                          {cType === 'FULL_CLAIM' && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-200">
+                              Full (100%)
+                            </span>
+                          )}
+                          {cType === 'PARTIAL_CLAIM' && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-800 border border-amber-200">
+                              Partial Claim
+                            </span>
+                          )}
+                          {cType === 'NO_CLAIM' && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-rose-100 text-rose-800 border border-rose-200">
+                              No Claim (Denied)
+                            </span>
+                          )}
                           {hasAck && (
                             <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-teal-100 text-teal-800 border border-teal-200">
-                              ACK ISSUED
+                              ACK
                             </span>
                           )}
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${statusBadge}`}>
@@ -382,7 +516,9 @@ export const InsurerDashboard: React.FC = () => {
                       </div>
                       <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100 text-[11px]">
                         <span className="text-slate-500">Claimed: ₹{cl.total_claimed?.toLocaleString()}</span>
-                        <span className="text-emerald-700 font-bold">Approved: ₹{cl.covered_amount?.toLocaleString()}</span>
+                        <span className={cType === 'NO_CLAIM' ? 'text-rose-600 font-bold' : 'text-emerald-700 font-bold'}>
+                          Approved: ₹{cl.covered_amount?.toLocaleString()}
+                        </span>
                       </div>
                     </div>
                   );
@@ -507,27 +643,111 @@ export const InsurerDashboard: React.FC = () => {
                     )}
                   </div>
 
-                  {/* Financial Breakdown */}
-                  <div className="grid grid-cols-3 gap-3 my-4 p-3 bg-slate-50 rounded-xl border border-slate-200 text-center">
-                    <div>
-                      <span className="text-[10px] text-slate-500 uppercase font-bold">Total Claimed</span>
-                      <div className="text-sm font-bold text-slate-900 mt-0.5">
-                        ₹{selectedClaim.total_claimed?.toLocaleString()}
+                  {/* Adjudication Settlement & Claim Type Breakdown */}
+                  {(() => {
+                    const selType = getClaimType(selectedClaim);
+                    const gross = selectedClaim.total_claimed || 1;
+                    const cov = selectedClaim.covered_amount || 0;
+                    const patPayable = selectedClaim.patient_payable ?? Math.max(0, gross - cov);
+                    const covPct = Math.min(100, Math.round((cov / gross) * 100));
+                    const patPct = 100 - covPct;
+
+                    return (
+                      <div className="my-4 p-4 rounded-xl border bg-slate-50 border-slate-200 space-y-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="text-xs font-bold text-slate-800 uppercase tracking-wide">
+                            Adjudication Settlement Summary
+                          </span>
+                          {selType === 'FULL_CLAIM' && (
+                            <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center">
+                              <Check className="w-3 h-3 mr-1" />
+                              100% Full Claim Approved
+                            </span>
+                          )}
+                          {selType === 'PARTIAL_CLAIM' && (
+                            <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 flex items-center">
+                              <AlertTriangle className="w-3 h-3 mr-1" />
+                              Partial Claim ({covPct}% Covered)
+                            </span>
+                          )}
+                          {selType === 'NO_CLAIM' && (
+                            <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-200 flex items-center">
+                              <X className="w-3 h-3 mr-1" />
+                              No Claim (Repudiated / 0% Covered)
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Financial 3-card Row */}
+                        <div className="grid grid-cols-3 gap-2.5 text-center">
+                          <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-2xs">
+                            <span className="text-[9px] text-slate-400 uppercase font-bold block">Total Claimed</span>
+                            <div className="text-sm font-extrabold text-slate-900 mt-0.5">
+                              ₹{gross.toLocaleString()}
+                            </div>
+                          </div>
+                          <div className={`p-3 rounded-lg border shadow-2xs ${
+                            selType === 'FULL_CLAIM' ? 'bg-emerald-50 border-emerald-200' :
+                            selType === 'PARTIAL_CLAIM' ? 'bg-indigo-50 border-indigo-200' :
+                            'bg-slate-100 border-slate-200'
+                          }`}>
+                            <span className="text-[9px] text-slate-500 uppercase font-bold block">Approved by Insurer</span>
+                            <div className={`text-sm font-extrabold mt-0.5 ${
+                              selType === 'NO_CLAIM' ? 'text-slate-400' : 'text-emerald-700'
+                            }`}>
+                              ₹{cov.toLocaleString()}
+                            </div>
+                          </div>
+                          <div className={`p-3 rounded-lg border shadow-2xs ${
+                            selType === 'NO_CLAIM' ? 'bg-rose-50 border-rose-200' :
+                            selType === 'PARTIAL_CLAIM' ? 'bg-amber-50 border-amber-200' :
+                            'bg-slate-50 border-slate-200'
+                          }`}>
+                            <span className="text-[9px] text-slate-500 uppercase font-bold block">Patient Share</span>
+                            <div className={`text-sm font-extrabold mt-0.5 ${
+                              selType === 'NO_CLAIM' ? 'text-rose-700' :
+                              selType === 'PARTIAL_CLAIM' ? 'text-amber-700' :
+                              'text-slate-400'
+                            }`}>
+                              ₹{patPayable.toLocaleString()}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Visual Proportional Split Bar */}
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between text-[11px] font-semibold text-slate-500">
+                            <span className="text-emerald-700 font-bold">Insurer Coverage: {covPct}%</span>
+                            <span className={selType === 'NO_CLAIM' ? 'text-rose-700 font-bold' : 'text-amber-700 font-bold'}>
+                              Patient Payable: {patPct}%
+                            </span>
+                          </div>
+                          <div className="h-2 w-full bg-slate-200 rounded-full overflow-hidden flex">
+                            <div style={{ width: `${covPct}%` }} className="bg-emerald-500 h-full transition-all" />
+                            <div style={{ width: `${patPct}%` }} className={`${selType === 'NO_CLAIM' ? 'bg-rose-500' : 'bg-amber-500'} h-full transition-all`} />
+                          </div>
+                        </div>
+
+                        {/* Official Adjudication Reason */}
+                        {selectedClaim.adjudication_reason && (
+                          <div className={`p-3 rounded-lg border text-xs leading-relaxed ${
+                            selType === 'FULL_CLAIM'
+                              ? 'bg-emerald-50 text-emerald-900 border-emerald-200'
+                              : selType === 'PARTIAL_CLAIM'
+                              ? 'bg-amber-50 text-amber-900 border-amber-200'
+                              : 'bg-rose-50 text-rose-900 border-rose-200'
+                          }`}>
+                            <span className="font-bold block mb-0.5">
+                              {selType === 'FULL_CLAIM' && '✓ Full Coverage Clearance Decision:'}
+                              {selType === 'PARTIAL_CLAIM' && '⚡ Deductions & Co-Pay Explanation:'}
+                              {selType === 'NO_CLAIM' && '✕ Official Claim Repudiation Reason:'}
+                            </span>
+                            <p>{selectedClaim.adjudication_reason}</p>
+                          </div>
+                        )}
                       </div>
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-emerald-600 uppercase font-bold">Approved By Payer</span>
-                      <div className="text-sm font-bold text-emerald-700 mt-0.5">
-                        ₹{selectedClaim.covered_amount?.toLocaleString()}
-                      </div>
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-amber-600 uppercase font-bold">Patient Payable</span>
-                      <div className="text-sm font-bold text-amber-700 mt-0.5">
-                        ₹{(selectedClaim.patient_payable || 0).toLocaleString()}
-                      </div>
-                    </div>
-                  </div>
+                    );
+                  })()}
 
                   {/* Structured Evidence & Rule Matching */}
                   <div>

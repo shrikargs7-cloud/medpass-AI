@@ -106,13 +106,18 @@ export interface ClaimItem {
   case_number: string;
   hospital_name: string;
   patient_name: string;
+  primary_diagnosis?: string;
   external_reference?: string;
   ack_token?: string;
   status: string;
+  claim_type?: 'FULL_CLAIM' | 'PARTIAL_CLAIM' | 'NO_CLAIM' | string;
+  claim_type_label?: string;
+  adjudication_reason?: string;
   total_claimed: number;
   covered_amount: number;
   patient_payable?: number;
   submitted_at: string;
+  decided_at?: string;
   queries_count: number;
 }
 

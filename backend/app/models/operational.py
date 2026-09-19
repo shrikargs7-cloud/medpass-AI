@@ -194,6 +194,9 @@ class Claim(Base):
     total_claimed = Column(Float, default=0.0)
     covered_amount = Column(Float, default=0.0)
     patient_payable = Column(Float, default=0.0)
+    claim_type = Column(String(50), nullable=True) # FULL_CLAIM, PARTIAL_CLAIM, NO_CLAIM
+    adjudication_reason = Column(Text, nullable=True)
+    ack_token = Column(String(100), nullable=True)
     submitted_at = Column(DateTime, default=datetime.utcnow)
     decided_at = Column(DateTime, nullable=True)
     last_external_sync_at = Column(DateTime, default=datetime.utcnow)
