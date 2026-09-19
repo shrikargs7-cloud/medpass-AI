@@ -32,9 +32,17 @@ class Settings(BaseSettings):
     # Privacy & Anonymization
     TRACE_PSEUDONYM_SECRET: str = os.getenv("TRACE_PSEUDONYM_SECRET", "medpass_prod_secret_salt_9842")
 
-    # Storage paths
+    # Storage paths & S3 Cloud Configuration
     STORAGE_DIR: str = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "storage"))
     EXPORT_DIR: str = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "exports"))
+
+    # S3 / Bunny Storage Configuration
+    S3_STORAGE_ENABLED: bool = os.getenv("S3_STORAGE_ENABLED", "true").lower() == "true"
+    S3_ENDPOINT_URL: str = os.getenv("S3_ENDPOINT_URL", "https://de-s3.storage.bunnycdn.com")
+    S3_ACCESS_KEY_ID: str = os.getenv("S3_ACCESS_KEY_ID", "my-storage09")
+    S3_SECRET_ACCESS_KEY: str = os.getenv("S3_SECRET_ACCESS_KEY", "b8a8900d-fe82-4cf8-ac44538a7c54-4066-48b7")
+    S3_BUCKET_NAME: str = os.getenv("S3_BUCKET_NAME", "my-storage09")
+    S3_REGION_NAME: str = os.getenv("S3_REGION_NAME", "de")
 
     @property
     def cors_origins_list(self) -> List[str]:

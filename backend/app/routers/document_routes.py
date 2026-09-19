@@ -9,6 +9,7 @@ from backend.app.models.operational import Case, Document, TreatmentLineItem
 from backend.app.services.llm_client import LLMDocumentIntelligenceService
 from backend.app.services.blocker_engine import ReadinessAndBlockerEngine
 from backend.app.services.trace_event_service import TraceEventService
+from backend.app.services.storage_service import StorageService
 
 router = APIRouter(prefix="/cases", tags=["Documents"])
 
@@ -37,8 +38,11 @@ async def upload_case_document(
     elif raw_text:
         content_text = raw_text
         filename = "clinical_text_entry.txt"
+        bytes_data = content_text.encode("utf-8")
     else:
         content_text = f"Inpatient hospital billing sheet\nDiagnosis: Appendicitis (K35.80)\nRoom Rent (3 days): 15000\nSurgical Laparoscopy: 55000\nDiagnostics & Labs: 8500\nPharmacy Inpatient: 9500"
+        filename = "billing_summary.txt"
+        bytes_data = content_text.encode("utf-8")
 
     # Run AI Document Intelligence Extraction
     extracted_data = LLMDocumentIntelligenceService.extract_document_data(
@@ -46,13 +50,18 @@ async def upload_case_document(
         mime_type=file.content_type if file and file.content_type else "text/plain"
     )
 
+    # Upload to S3-compatible cloud storage
+    storage_key = f"cases/{case.id}/docs/{uuid.uuid4().hex}_{filename}"
+    mime_type = file.content_type if file and file.content_type else ("application/pdf" if filename.endswith(".pdf") else "text/plain")
+    storage_res = StorageService.upload_file(bytes_data or b"", storage_key, mime_type)
+
     doc = Document(
         case_id=case.id,
         doc_type=doc_type,
         file_name=filename,
-        storage_key=f"cases/{case.id}/docs/{uuid.uuid4().hex}_{filename}",
-        sha256="mock_sha256_" + uuid.uuid4().hex[:16],
-        mime_type="application/pdf" if filename.endswith(".pdf") else "text/plain",
+        storage_key=storage_key,
+        sha256=storage_res["sha256"],
+        mime_type=mime_type,
         extracted_data=extracted_data,
         confidence=extracted_data.get("confidence", 0.95)
     )
@@ -105,6 +114,9 @@ async def upload_case_document(
         "document_id": doc.id,
         "doc_type": doc.doc_type,
         "file_name": doc.file_name,
+        "storage_key": doc.storage_key,
+        "storage_url": storage_res["url"],
+        "storage_provider": storage_res["provider"],
         "extracted_data": doc.extracted_data,
         "added_line_items": added_items_count,
         "new_readiness_score": case.readiness_score,
@@ -122,9 +134,27 @@ def list_case_documents(case_id: str, db: Session = Depends(get_db)):
             "id": d.id,
             "doc_type": d.doc_type,
             "file_name": d.file_name,
+            "storage_key": d.storage_key,
             "confidence": d.confidence,
             "uploaded_at": d.uploaded_at,
             "extracted_data": d.extracted_data
         }
         for d in (case.documents or [])
     ]
+
+@router.get("/{case_id}/documents/{doc_id}/download")
+def download_case_document(case_id: str, doc_id: str, db: Session = Depends(get_db)):
+    doc = db.query(Document).filter(Document.id == doc_id, Document.case_id == case_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    file_bytes = StorageService.get_file_bytes(doc.storage_key)
+    if not file_bytes:
+        raise HTTPException(status_code=404, detail="Document file not found in storage")
+
+    from fastapi.responses import Response
+    return Response(
+        content=file_bytes,
+        media_type=doc.mime_type or "application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="{doc.file_name}"'}
+    )

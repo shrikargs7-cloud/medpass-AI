@@ -101,6 +101,14 @@ def readiness_check(response: Response):
         checks["storage"] = f"unwritable: {str(e)}"
         healthy = False
 
+    # 3. Test S3 Cloud Storage
+    try:
+        from backend.app.services.storage_service import StorageService
+        s3_stat = StorageService.check_health()
+        checks["cloud_s3"] = s3_stat
+    except Exception as e:
+        checks["cloud_s3"] = {"status": "error", "error": str(e)}
+
     if not healthy:
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
         return {"status": "not_ready", "checks": checks}
