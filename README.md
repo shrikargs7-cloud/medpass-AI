@@ -1,103 +1,122 @@
-# MedPass AI & Trace Commons
+<div align="center">
+  
+# 🏥 MedPass AI & Trace Commons
+  
+**Next-Generation Healthcare Workflow & Anonymous Data Platform**
 
-**MedPass AI** is a modern healthcare workflow platform that automates insurance approvals, analyzes hospital discharge blockers, and creates anonymous medical datasets for researchers. It simplifies the complicated process of health insurance claims into a transparent, easy-to-use interface.
+[![Demo Video](https://img.shields.io/badge/🎥_Watch_Demo_Video-Click_Here-blue?style=for-the-badge)](https://drive.google.com/file/d/1dmNqRtss118P9AUq0twe5tZ5-AvA5mn1/view?usp=sharing)
 
----
-
-## 🚀 Key Features
-
-1. **Smart Insurance Dashboards:**
-   - **For Hospitals:** Easily track active admissions, view real-time discharge blockers, and monitor the pre-authorization pipeline.
-   - **For Insurers:** A secure adjudication portal to review claims, automatically map billing codes, and instantly flag fraudulent or missing data.
-   - **For Patients:** A jargon-free view of their coverage, showing exactly what is covered and why.
-
-2. **AI-Powered Medical Chatbot:**
-   - Ask our built-in assistant about cases, claim statuses, and policy details.
-   - It seamlessly reads clinical data and returns beautifully formatted, accurate answers (No AI hallucinations).
-
-3. **Trace Commons (Database Engine):**
-   - Strictly reserved for administrators, this engine converts live hospital data into 100% anonymous operational datasets.
-   - Generates research-ready ZIP bundles containing CSV and highly-compressed **Parquet** files that are fully compliant with the DPDP Act 2023.
+</div>
 
 ---
 
-## 🛠 Tech Stack
+## 📖 Overview
 
-*   **Frontend:** React, TypeScript, Vite, Tailwind CSS, Google Sans (Plus Jakarta Sans).
-*   **Backend:** Python, FastAPI, SQLite/PostgreSQL, DuckDB, Pandas, PyArrow.
-*   **AI Integrations:** Google Gemini (for Document Parsing & Chatbot).
+**MedPass AI** is a comprehensive, modern healthcare workflow platform designed to bridge the gap between hospitals, insurers, and patients. It automates insurance approvals, analyzes hospital discharge blockers in real-time, and strictly adjudicates claims without hallucination. 
+
+In addition to operational workflows, the platform includes **Trace Commons**—an isolated, strictly-governed database engine that converts live hospital data into 100% anonymous, highly-monetizable operational datasets for researchers and underwriters, fully compliant with the DPDP Act 2023.
 
 ---
 
-## ⚙️ CI/CD Pipeline
+## 🚀 Core Platform Features
+
+### 1. Smart Insurance Dashboards
+- **Hospital Administration Portal:** Easily track active admissions, view real-time discharge blockers, and monitor the pre-authorization pipeline through beautiful, semantic data visualizations.
+- **Insurer Adjudication Portal:** A secure, dedicated environment to review claims, automatically map billing codes, and instantly flag fraudulent or missing data via a deterministic rules engine.
+- **Patient Portal:** A jargon-free, transparent view of a patient's insurance coverage, showing exactly what is covered, what was rejected, and why.
+
+### 2. AI-Powered Medical Chatbot
+- **Context-Aware Assistance:** Ask our built-in assistant about cases, claim statuses, and policy details.
+- **Deterministic Guardrails:** The chatbot seamlessly reads clinical data and returns beautifully formatted, accurate markdown answers. We implemented strict word-boundary NLP matching to completely eliminate patient-name hallucinations during generic queries.
+
+### 3. Trace Commons (Data Export Engine)
+- **Zero-PII Architecture:** Strictly reserved for administrators, this engine scrubs all Protected Health Information (PHI) and Personally Identifiable Information (PII). Exact dates become generalized months, and exact ages become 15-year brackets.
+- **Premium Data Formats:** Generates research-ready ZIP bundles containing enriched CSVs and highly-compressed **Apache Parquet** files, including detailed Data Dictionaries mapping clinical and financial domains.
+
+---
+
+## 🏆 Hackathon Tracks Implemented
+
+| Hackathon Track | Implementation Details |
+|---|---|
+| **1. GitHub Developer Track** | Implemented a clean Git tree, robust **GitHub Actions CI/CD pipeline** (automatically builds frontend and validates backend syntax on push), CODEOWNERS, and issue/PR templates. |
+| **2. Beeceptor Mocking Track** | Built a mock client & simulator for Insurer Preauthorization, NHCX Claim Submission, and FHIR endpoints handling Success, Query, Rejection, and 500 error scenarios. |
+| **3. Render / Vercel Cloud Deployment Track** | Multi-service blueprints, containerized backend configurations, and highly-optimized Vite/React frontend deployed via Vercel Serverless with strict environment variable configuration. |
+| **4. n8n Automation Track** | Engineered a decoupled outbound webhook dispatcher firing on case lifecycle events (e.g., `CLAIM_SUBMITTED`, `STATUS_CHANGED`) with a ready-to-import n8n operational workflow. |
+
+---
+
+## 🏗 System Architecture
+
+```text
+                          ┌────────────────────────────────────────────────────────┐
+                          │         React + TypeScript + Tailwind + Lucide         │
+                          │   (Hospital, Insurer, Patient, Admin & Trace Portals)  │
+                          └───────────────────────────┬────────────────────────────┘
+                                                      │ REST API
+                                                      ▼
+┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                FastAPI Modular Backend Service                                   │
+├─────────────────────────────────────────┬────────────────────────────────────────────────────────┤
+│ MedPass AI Core:                        │ Trace Commons Data Layer:                              │
+│ • Document Intelligence (OCR/LLM)       │ • Transactional Event Outbox & Ingestion               │
+│ • Deterministic Policy Engine           │ • Privacy De-identification Gate (Presidio/Regex/Mask) │
+│ • Financial Waterfall Calculator        │ • Data Quality Rules Engine (Completeness/Integrity)   │
+│ • Case Readiness & Blocker Engine       │ • Dataset Catalog & Versioning                           │
+│ • Decision & Audit Evidence Engine      │ • DuckDB Cohort Query & Parquet/CSV Export Engine      │
+└───────────────────────────┬──────────────────────────────────────────┬───────────────────────────┘
+                            ▼                                          ▼
+                PostgreSQL / SQLite DB                        DuckDB & Parquet Engine
+           (Operational `app` & `trace` schemas)               (Longitudinal Analytics)
+```
+
+---
+
+## ⚙️ CI/CD Pipeline & Deployment
 
 This project includes a fully automated Continuous Integration & Continuous Deployment (CI/CD) pipeline via **GitHub Actions**.
 
-*   **Continuous Integration (CI):** On every push or pull request to the `main` branch, GitHub Actions automatically spins up an Ubuntu environment, installs all Node.js/Python dependencies, builds the Vite frontend, and validates the backend Python syntax.
+*   **Continuous Integration (CI):** On every push or pull request to the `main` branch, GitHub Actions automatically provisions an Ubuntu environment, installs all Node.js/Python dependencies, builds the Vite frontend, and validates the backend Python syntax.
 *   **Continuous Deployment (CD):** 
     *   **Frontend:** Deploys instantly via **Vercel**. Any updates to the `main` branch trigger a live production build.
-    *   **Backend:** Deploys via cloud platforms (like Render or Railway) by binding to the `$PORT` environment variable.
-
-*(You can view the exact pipeline script in `.github/workflows/ci-cd.yml`)*
+    *   **Backend:** Deploys seamlessly to cloud platforms (like Render or Railway) by dynamically binding to the `$PORT` environment variable.
 
 ---
 
-## 🚀 How to Deploy
+## 💻 Local Setup (For Developers)
 
-### 1. Deploying the Frontend (Vercel)
-1. Import this repository into Vercel.
-2. Set the **Framework Preset** to `Vite`.
-3. Set the **Root Directory** to `frontend`.
-4. Leave the Build Command as `npm run build` and Output Directory as `dist`.
-5. Under Environment Variables, paste the following (Ensure you update the API URL to your live backend):
-   ```env
-   VITE_API_URL=https://your-backend-url-goes-here.com
-   VITE_FIREBASE_API_KEY=your_key_here
-   VITE_FIREBASE_AUTH_DOMAIN=medpass-93fd7.firebaseapp.com
-   VITE_FIREBASE_PROJECT_ID=medpass-93fd7
-   VITE_FIREBASE_STORAGE_BUCKET=medpass-93fd7.firebasestorage.app
-   VITE_FIREBASE_MESSAGING_SENDER_ID=160228173971
-   VITE_FIREBASE_APP_ID=1:160228173971:web:678dfff4291e595774c566
-   VITE_FIREBASE_MEASUREMENT_ID=G-J6JRG584YE
-   ```
-
-### 2. Deploying the Backend
-1. Deploy the `backend/` folder to a service like Render or AWS.
-2. Set the following Environment Variables:
-   ```env
-   SECRET_KEY=medpass_production_secret_9942_!@#
-   CORS_ORIGINS=*
-   GEMINI_API_KEY=your_google_ai_key
-   ```
-3. The server will start automatically by binding to `0.0.0.0:$PORT`.
-
----
-
-## 🖥 Local Setup (For Developers)
-
-**Backend Setup:**
+### Backend Setup (Python/FastAPI)
 ```bash
 cd backend
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
+
+# Seed the database with demo cases and trace encounters
 python ../scripts/seed_demo.py
 python ../scripts/seed_trace.py
+
+# Start the server
 uvicorn app.main:app --reload --port 8000
 ```
 
-**Frontend Setup:**
+### Frontend Setup (React/Vite)
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
+Navigate to `http://localhost:5173` in your browser.
 
 ---
 
-## 🔄 Latest Updates (Current Release)
-- **UI & Typography Polish:** Replaced broken CDN fonts with Plus Jakarta Sans (Google Sans) for a crisp, enterprise-grade aesthetic.
-- **Dynamic Analytics Redesign:** Completely overhauled the Hospital Preauth Pipeline and Discharge Blocker infographics with live data, premium semantic colors, and smooth animations.
-- **Enhanced Data Exports:** Upgraded the Trace Commons engine to produce richly detailed, fully anonymized CSV and Parquet files for clinical/financial research.
-- **Chatbot Fixes:** Implemented exact word-boundary NLP matching to prevent patient name hallucinations during generic queries.
+## 🔄 Recent Updates & Polish
+- **Typography Overhaul:** Replaced external CDNs with Plus Jakarta Sans (Google Sans) for a crisp, enterprise-grade UI aesthetic.
+- **Dynamic Infographics Redesign:** Overhauled the Hospital Preauth Pipeline and Discharge Blocker charts with live data mapping, semantic colors, and smooth rendering animations.
+- **Trace Export Expansion:** Upgraded the Trace Commons engine to produce richly detailed clinical/financial columns without compromising PII constraints.
 
+---
+
+<div align="center">
+  <i>Built with ❤️ for DSU DevHack 3.0</i>
+</div>
