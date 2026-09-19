@@ -119,7 +119,26 @@ flowchart TB
 
     class Stakeholders,Dash,Viz,CE,PE,Calc,DI,Doc,PG,Auth secure;
 ```
+---
 
+# 💼 Business Model
+
+MedPass AI follows a **B2B Healthcare SaaS + AI Analytics** business model with multiple revenue streams across hospitals, insurers, and healthcare intelligence.
+
+| 💰 Revenue Stream | 🎯 Description |
+|------------------|----------------|
+| 🏥 **Hospital SaaS Subscription** | Subscription plans for hospitals to manage insurance and discharge workflows. |
+| 🧾 **Per-Case Transaction Fees** | Charges for each insurance pre-authorization or claim processed. |
+| 🏢 **Enterprise Hospital Plans** | Custom deployments for hospital chains and healthcare networks. |
+| 🛡️ **Insurer / TPA Integration** | API integrations for automated claim verification and adjudication. |
+| 🎨 **White-Label Solutions** | Custom-branded MedPass AI platform for hospitals and TPAs. |
+| 🔌 **API & Integration Services** | FHIR, OCR, webhook, and insurance APIs for third-party systems. |
+| 📊 **Analytics & Intelligence** | Premium dashboards for operational, financial, and claim analytics. |
+| 🔬 **Trace Commons Data Products** | Anonymous healthcare datasets for research and enterprise analytics. |
+| 🤖 **AI Automation Add-ons** | OCR, chatbot, discharge summaries, and workflow automation modules. |
+| 🧠 **Research & Healthcare Intelligence** | Longitudinal disease insights and population health analytics via Trace Commons. |
+
+> **Revenue Strategy:** SaaS subscriptions • Per-case processing • API licensing • Enterprise plans • AI automation • Privacy-preserving analytics.
 ---
 
 ## 🛠 Technology Stack
