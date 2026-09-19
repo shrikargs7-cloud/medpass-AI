@@ -17,7 +17,7 @@ In addition to operational workflows, the platform includes **Trace Commons**—
 
 ---
 
-## 🚀 Core Platform Features
+## Core Platform Features
 
 ### 1. Smart Insurance Dashboards
 - **Hospital Administration Portal:** Easily track active admissions, view real-time discharge blockers, and monitor the pre-authorization pipeline through beautiful, semantic data visualizations.
@@ -61,7 +61,7 @@ In addition to operational workflows, the platform includes **Trace Commons**—
 │ • Document Intelligence (OCR/LLM)       │ • Transactional Event Outbox & Ingestion               │
 │ • Deterministic Policy Engine           │ • Privacy De-identification Gate (Presidio/Regex/Mask) │
 │ • Financial Waterfall Calculator        │ • Data Quality Rules Engine (Completeness/Integrity)   │
-│ • Case Readiness & Blocker Engine       │ • Dataset Catalog & Versioning                           │
+│ • Case Readiness & Blocker Engine       │ • Dataset Catalog & Versioning                         │
 │ • Decision & Audit Evidence Engine      │ • DuckDB Cohort Query & Parquet/CSV Export Engine      │
 └───────────────────────────┬──────────────────────────────────────────┬───────────────────────────┘
                             ▼                                          ▼
