@@ -125,7 +125,30 @@ export function App() {
       />
 
       {/* Footer */}
-      <footer className="bg-white border-t border-slate-200 py-4 px-6 text-center text-xs text-slate-500">
+      <footer className="bg-white border-t border-slate-200 py-3.5 px-6 text-xs text-slate-500 font-sans">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2.5">
+          <div className="flex flex-wrap items-center gap-2 text-[11px]">
+            <span className="font-bold text-slate-800">MedPass AI Suite</span>
+            <span className="text-slate-300">•</span>
+            <span className="text-emerald-700 font-semibold inline-flex items-center">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5 animate-pulse"></span>
+              ABDM & NHCX FHIR R4 Compliant
+            </span>
+            <span className="text-slate-300">•</span>
+            <span className="text-slate-600">Cloud S3 Storage Active</span>
+          </div>
+          <div className="flex items-center space-x-3 text-[11px] text-slate-500">
+            <span>IRDAI Cashless Everywhere v2026.1</span>
+            <span className="text-slate-300">•</span>
+            <button
+              type="button"
+              onClick={() => setIsMCPOpen(true)}
+              className="text-teal-700 hover:text-teal-900 font-semibold cursor-pointer transition-colors"
+            >
+              Open AI Copilot
+            </button>
+          </div>
+        </div>
       </footer>
     </div>
   );

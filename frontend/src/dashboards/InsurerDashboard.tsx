@@ -113,7 +113,7 @@ export const InsurerDashboard: React.FC = () => {
     setSelectedClaim(claim);
     setAckForm((prev) => ({
       ...prev,
-      ack_token: `ACK-NHCX-${Date.now().toString().slice(-7)}`,
+      ack_token: generateAckToken(),
       approved_amount: claim.covered_amount || claim.total_claimed || 0
     }));
     try {
