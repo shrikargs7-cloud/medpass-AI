@@ -29,25 +29,64 @@ async def upload_case_document(
     filename = "document.pdf"
     bytes_data = None
     if file:
-        filename = file.filename
+        filename = file.filename or "uploaded_file.bin"
         bytes_data = await file.read()
-        try:
-            content_text = bytes_data.decode("utf-8")
-        except Exception:
-            content_text = raw_text or f"Itemized Hospital Bill for {filename}\nPatient Name: {case.patient.full_name if case.patient else 'Patient'}\nDiagnosis: Acute Appendicitis (K35.80)\nRoom Rent (3 days): 15000\nSurgical OT Charges: 55000\nAbdominal Ultrasound: 8500\nInpatient Pharmacy Drugs: 9500"
+        
+        # Max file size guard: 25 MB
+        if len(bytes_data) > 25 * 1024 * 1024:
+            raise HTTPException(status_code=413, detail="File too large. Maximum supported document size is 25 MB.")
+
+        fn_lower = filename.lower()
+        if fn_lower.endswith(".pdf"):
+            try:
+                import pypdf
+                from io import BytesIO
+                reader = pypdf.PdfReader(BytesIO(bytes_data))
+                pages = [p.extract_text() or "" for p in reader.pages]
+                content_text = "\n".join(pages).strip()
+            except Exception as e:
+                content_text = ""
+        elif fn_lower.endswith(".docx"):
+            try:
+                import docx
+                from io import BytesIO
+                doc_obj = docx.Document(BytesIO(bytes_data))
+                content_text = "\n".join([p.text for p in doc_obj.paragraphs if p.text]).strip()
+            except Exception as e:
+                content_text = ""
+        else:
+            try:
+                content_text = bytes_data.decode("utf-8")
+            except UnicodeDecodeError:
+                try:
+                    content_text = bytes_data.decode("latin-1")
+                except Exception:
+                    content_text = ""
+
+        if not content_text and raw_text:
+            content_text = raw_text
+
+        # If still no text extracted and file is not an image or PDF, reject unreadable file
+        if not content_text and not fn_lower.endswith((".pdf", ".png", ".jpg", ".jpeg")):
+            raise HTTPException(
+                status_code=400,
+                detail="Unable to extract text from the uploaded document. Please ensure it is a valid text, PDF, DOCX, or image file."
+            )
     elif raw_text:
-        content_text = raw_text
+        content_text = raw_text.strip()
         filename = "clinical_text_entry.txt"
         bytes_data = content_text.encode("utf-8")
     else:
-        content_text = f"Inpatient hospital billing sheet\nDiagnosis: Appendicitis (K35.80)\nRoom Rent (3 days): 15000\nSurgical Laparoscopy: 55000\nDiagnostics & Labs: 8500\nPharmacy Inpatient: 9500"
-        filename = "billing_summary.txt"
-        bytes_data = content_text.encode("utf-8")
+        raise HTTPException(
+            status_code=400,
+            detail="No document file or text content provided. Please upload a file or paste bill text."
+        )
 
-    # Run AI Document Intelligence Extraction
+    # Run AI / Clinical NLP Document Intelligence Extraction
     extracted_data = LLMDocumentIntelligenceService.extract_document_data(
-        content_text, doc_type, image_bytes=bytes_data if file and filename.lower().endswith((".jpg", ".jpeg", ".png")) else None,
-        mime_type=file.content_type if file and file.content_type else "text/plain"
+        content_text, doc_type,
+        image_bytes=bytes_data if file and filename.lower().endswith((".jpg", ".jpeg", ".png", ".pdf")) else None,
+        mime_type=file.content_type if file and file.content_type else ("application/pdf" if filename.endswith(".pdf") else "text/plain")
     )
 
     # Upload to S3-compatible cloud storage
@@ -135,6 +174,7 @@ def list_case_documents(case_id: str, db: Session = Depends(get_db)):
             "doc_type": d.doc_type,
             "file_name": d.file_name,
             "storage_key": d.storage_key,
+            "sha256": d.sha256,
             "confidence": d.confidence,
             "uploaded_at": d.uploaded_at,
             "extracted_data": d.extracted_data

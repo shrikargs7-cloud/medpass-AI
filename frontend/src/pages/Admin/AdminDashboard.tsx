@@ -19,6 +19,7 @@ import { generateHospitalCode, generateInsurerCode, generatePolicyRef, generateU
 interface AdminDashboardProps {
   onLogout: () => void;
   userName: string;
+  initialTab?: AdminTab;
 }
 
 export type AdminTab =
@@ -89,8 +90,8 @@ interface AuditRecord {
   result: 'Success' | 'Warning' | 'Blocked';
 }
 
-export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, userName }) => {
-  const [activeTab, setActiveTab] = useState<AdminTab>('overview');
+export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, userName, initialTab }) => {
+  const [activeTab, setActiveTab] = useState<AdminTab>(initialTab || 'overview');
   const [globalSearch, setGlobalSearch] = useState('');
   const [notification, setNotification] = useState<string | null>(null);
 

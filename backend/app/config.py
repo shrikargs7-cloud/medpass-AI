@@ -13,6 +13,7 @@ load_dotenv(os.path.join(_root_dir, ".env"))
 class Settings(BaseSettings):
     PROJECT_NAME: str = "MedPass AI + Trace Commons"
     ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
+    DEMO_MODE: bool = os.getenv("DEMO_MODE", "true").lower() == "true"
     PORT: int = int(os.getenv("PORT", 8000))
     SECRET_KEY: str = os.getenv("SECRET_KEY", "medpass_super_secret_dev_key_2026")
     DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./medpass.db")

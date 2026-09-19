@@ -62,7 +62,8 @@ VALID_TRANSITIONS = {
     ],
     CanonicalCaseState.APPROVED: [
         CanonicalCaseState.DISCHARGE_REVIEW,
-        CanonicalCaseState.DISCHARGE_READY
+        CanonicalCaseState.DISCHARGE_READY,
+        CanonicalCaseState.DISCHARGED
     ],
     CanonicalCaseState.REJECTED: [
         CanonicalCaseState.COMPLETED,
@@ -239,12 +240,14 @@ class CaseWorkflowService:
             )
 
         cls.transition(db, case, CanonicalCaseState.DISCHARGED, actor_role=actor_role, reason="Discharge authorized by clinical and billing administration.")
+        now = datetime.utcnow()
         case.discharge_status = "DISCHARGED"
-        case.discharged_at = datetime.utcnow()
+        case.discharge_at = now
+        case.discharged_at = now
 
         TraceEventService.record_event(
             db, "CASE_DISCHARGED", case, actor_role=actor_role,
-            extra_data={"discharged_at": case.discharged_at.isoformat()}
+            extra_data={"discharged_at": now.isoformat()}
         )
 
         db.commit()

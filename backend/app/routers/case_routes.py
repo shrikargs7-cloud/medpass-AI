@@ -101,6 +101,8 @@ def create_case(payload: CaseCreate, db: Session = Depends(get_db)):
             description=b["description"],
             action_required=b.get("action_required")
         )
+        db.add(blocker_rec)
+    db.flush()
     # 6. Create initial inbound Claim in SUBMITTED / PENDING state so insurer person can review & adjudicate it
     total_gross = sum(float(it.unit_amount * it.quantity) for it in payload.line_items)
     new_claim = Claim(

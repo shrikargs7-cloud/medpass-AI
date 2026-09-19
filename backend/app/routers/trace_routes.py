@@ -10,8 +10,10 @@ from backend.app.db import get_db
 from backend.app.models.trace import (
     TraceDataset, DatasetVersion, QualityRun, ExportJob,
     TraceEncounter, TraceSubject, TraceFacility, TraceCondition,
-    TraceProcedure, TraceInsuranceEvent, TraceWorkflowEvent
+    TraceProcedure, TraceInsuranceEvent, TraceWorkflowEvent,
+    TraceObservation, TraceMedication, TraceOutcome
 )
+from backend.app.services.quality_service import DataQualityService
 from backend.app.models.audit import AuditLog
 from backend.app.schemas.trace import (
     CohortFilter, CohortPreviewResponse, ExportJobCreate, ExportJobResponse,
@@ -29,10 +31,28 @@ def get_trace_overview(db: Session = Depends(get_db)):
     fac_count = db.query(TraceFacility).count()
     cond_count = db.query(TraceCondition).count()
     proc_count = db.query(TraceProcedure).count()
+    obs_count = db.query(TraceObservation).count()
+    med_count = db.query(TraceMedication).count()
     ins_count = db.query(TraceInsuranceEvent).count()
     wf_count = db.query(TraceWorkflowEvent).count()
+    outcome_count = db.query(TraceOutcome).count()
 
-    total_events = cond_count + proc_count + ins_count + wf_count
+    total_events = cond_count + proc_count + obs_count + med_count + ins_count + wf_count + outcome_count
+
+    # Real dynamic completeness across encounters and key clinical domains
+    if enc_count > 0:
+        valid_encs = db.query(TraceEncounter).filter(
+            TraceEncounter.subject_key.isnot(None),
+            TraceEncounter.facility_key.isnot(None),
+            TraceEncounter.start_month.isnot(None)
+        ).count()
+        completeness_score = round(valid_encs / enc_count, 3)
+    else:
+        completeness_score = 1.0
+
+    # Active dataset version from published records
+    latest_version = db.query(DatasetVersion).order_by(DatasetVersion.published_at.desc()).first()
+    active_version_tag = latest_version.version_tag if latest_version else "trace-core-1.3.0"
 
     # Facility distribution
     fac_stats = db.query(
@@ -53,8 +73,8 @@ def get_trace_overview(db: Session = Depends(get_db)):
             "total_subjects": subj_count,
             "total_facilities": fac_count,
             "total_events": total_events,
-            "completeness_score": 0.985,
-            "active_dataset_version": "trace-core-1.3.0",
+            "completeness_score": completeness_score,
+            "active_dataset_version": active_version_tag,
             "privacy_gate_blocks": 0
         },
         "facility_contribution": [
@@ -67,16 +87,29 @@ def get_trace_overview(db: Session = Depends(get_db)):
             {"domain": "Encounters", "count": enc_count},
             {"domain": "Conditions (ICD-10)", "count": cond_count},
             {"domain": "Procedures (CPT)", "count": proc_count},
+            {"domain": "Observations & Labs", "count": obs_count},
+            {"domain": "Prescription Medications", "count": med_count},
             {"domain": "Insurance Events", "count": ins_count},
-            {"domain": "Workflow Events", "count": wf_count}
+            {"domain": "Workflow Events", "count": wf_count},
+            {"domain": "Outcomes & Discharges", "count": outcome_count}
         ]
     }
 
 @router.get("/datasets", response_model=List[DatasetCardResponse])
 def list_datasets(db: Session = Depends(get_db)):
     datasets = db.query(TraceDataset).all()
+    enc_count = db.query(TraceEncounter).count()
+    fac_count = db.query(TraceFacility).count()
+    cond_count = db.query(TraceCondition).count()
+    proc_count = db.query(TraceProcedure).count()
+    obs_count = db.query(TraceObservation).count()
+    med_count = db.query(TraceMedication).count()
+    ins_count = db.query(TraceInsuranceEvent).count()
+    wf_count = db.query(TraceWorkflowEvent).count()
+    outcome_count = db.query(TraceOutcome).count()
+    total_events = cond_count + proc_count + obs_count + med_count + ins_count + wf_count + outcome_count
+
     if not datasets:
-        # Seed default dataset record
         default_ds = TraceDataset(
             dataset_key="trace-core",
             title="Trace Commons Core Longitudinal Healthcare Dataset",
@@ -93,10 +126,10 @@ def list_datasets(db: Session = Depends(get_db)):
             status="PUBLISHED",
             period_start=date(2025, 10, 1),
             period_end=date(2026, 9, 30),
-            encounter_count=db.query(TraceEncounter).count(),
-            event_count=5000,
-            facility_count=3,
-            completeness_score=0.985,
+            encounter_count=enc_count,
+            event_count=total_events,
+            facility_count=fac_count or 1,
+            completeness_score=0.985 if enc_count > 0 else 1.0,
             privacy_status="PASSED"
         )
         db.add(v)
@@ -109,17 +142,41 @@ def list_datasets(db: Session = Depends(get_db)):
 def get_dataset_quality(dataset_id: str, db: Session = Depends(get_db)):
     run = db.query(QualityRun).order_by(QualityRun.run_at.desc()).first()
     if not run:
-        return {
-            "passed": True,
-            "completeness": 0.985,
-            "duplicate_rate": 0.0008,
-            "referential_failures": 0,
-            "temporal_failures": 0,
-            "privacy_findings": 0,
-            "rules_passed": 12,
-            "rules_failed": 0,
-            "engine": "Custom Rules Engine + Postgres Constraints"
-        }
+        # Dynamically evaluate quality using DataQualityService
+        encounters = [
+            {
+                "encounter_key": e.encounter_key,
+                "subject_key": e.subject_key,
+                "facility_key": e.facility_key,
+                "encounter_type": e.encounter_type,
+                "start_month": e.start_month,
+                "end_month": e.end_month
+            }
+            for e in db.query(TraceEncounter).limit(500).all()
+        ]
+        events = [
+            {"encounter_key": c.encounter_key, "event_type": "CONDITION"}
+            for c in db.query(TraceCondition).limit(500).all()
+        ] + [
+            {"encounter_key": p.encounter_key, "event_type": "PROCEDURE"}
+            for p in db.query(TraceProcedure).limit(500).all()
+        ]
+
+        q_res = DataQualityService.evaluate_quality(encounters, events)
+        new_run = QualityRun(
+            dataset_version_id=dataset_id,
+            passed=q_res["passed"],
+            completeness=q_res["completeness"],
+            duplicate_rate=q_res["duplicate_rate"],
+            referential_failures=q_res["referential_failures"],
+            temporal_failures=q_res["temporal_failures"],
+            privacy_findings=q_res["privacy_findings"],
+            quality_report=q_res
+        )
+        db.add(new_run)
+        db.commit()
+        return q_res
+
     return run.quality_report or {
         "passed": run.passed,
         "completeness": run.completeness,

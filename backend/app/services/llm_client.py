@@ -63,13 +63,14 @@ class LLMDocumentIntelligenceService:
         parts: List[Dict[str, Any]] = []
         if doc_text.strip():
             parts.append({"text": f"{system_instruction}\n\nDocument Text:\n{doc_text}"})
-        elif image_bytes:
+        if image_bytes:
             import base64
             b64_data = base64.b64encode(image_bytes).decode("utf-8")
-            parts.append({"text": system_instruction})
+            if not doc_text.strip():
+                parts.append({"text": system_instruction})
             parts.append({
                 "inline_data": {
-                    "mime_type": mime_type,
+                    "mime_type": mime_type or "application/pdf",
                     "data": b64_data
                 }
             })
@@ -105,8 +106,8 @@ class LLMDocumentIntelligenceService:
             "document_type": doc_type,
             "patient_name": None,
             "patient_ref": None,
-            "diagnosis_code": "K35.80",
-            "diagnosis_name": "Acute Appendicitis",
+            "diagnosis_code": None,
+            "diagnosis_name": None,
             "policy_number": None,
             "line_items": [],
             "uncertain_fields": [],

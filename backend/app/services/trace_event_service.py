@@ -9,14 +9,15 @@ from backend.app.models.audit import OutboxEvent, AuditLog
 from backend.app.models.operational import Case
 from backend.app.models.trace import (
     TraceSubject, TraceFacility, TraceEncounter, TraceCondition,
-    TraceProcedure, TraceInsuranceEvent, TraceWorkflowEvent, TraceOutcome
+    TraceProcedure, TraceObservation, TraceMedication,
+    TraceInsuranceEvent, TraceWorkflowEvent, TraceOutcome
 )
 from backend.app.services.privacy_service import PrivacyDeidentificationService
 
 INSURANCE_EVENT_TYPES = {
-    "PREAUTH_REQUESTED", "PREAUTH_SUBMITTED", "PREAUTH_APPROVED",
+    "PREAUTH_REQUESTED", "PREAUTH_SUBMITTED", "PREAUTH_TRANSMITTED", "PREAUTH_APPROVED",
     "PREAUTH_REJECTED", "PREAUTH_QUERY", "CLAIM_SUBMITTED",
-    "CLAIM_QUERY", "CLAIM_APPROVED", "CLAIM_REJECTED", "CLAIM_SETTLED"
+    "CLAIM_QUERY", "CLAIM_QUERIED", "CLAIM_QUERY_RESPONDED", "CLAIM_APPROVED", "CLAIM_REJECTED", "CLAIM_SETTLED"
 }
 
 class TraceEventService:
@@ -121,7 +122,14 @@ class TraceEventService:
 
         encounter = db.query(TraceEncounter).filter(TraceEncounter.encounter_key == enc_key).first()
         start_month = case.admission_at.date().replace(day=1) if case.admission_at else date.today().replace(day=1)
-        end_month = case.discharge_at.date().replace(day=1) if case.discharge_at else start_month
+        disch_dt = case.discharge_at or getattr(case, "discharged_at", None)
+        end_month = disch_dt.date().replace(day=1) if disch_dt else start_month
+
+        calc_los = 1
+        if disch_dt and case.admission_at:
+            calc_los = max(1, (disch_dt.date() - case.admission_at.date()).days)
+        elif getattr(case, "estimated_days", None):
+            calc_los = max(1, case.estimated_days)
 
         if not encounter:
             encounter = TraceEncounter(
@@ -131,10 +139,13 @@ class TraceEventService:
                 encounter_type="INPATIENT",
                 start_month=start_month,
                 end_month=end_month,
-                los_days=3
+                los_days=calc_los
             )
             db.add(encounter)
             db.flush()
+        else:
+            encounter.los_days = calc_los
+            encounter.end_month = end_month
 
         # 4. Add condition if primary diagnosis is present
         if case.primary_diagnosis_code:
@@ -153,7 +164,7 @@ class TraceEventService:
                 )
                 db.add(cond)
 
-        # 5. Add procedures from line items
+        # 5. Add procedures, observations, and medications from line items
         for item in (case.line_items or []):
             if item.category in ["SURGERY", "PROCEDURE"]:
                 existing_proc = db.query(TraceProcedure).filter(
@@ -170,12 +181,40 @@ class TraceEventService:
                         event_month=start_month
                     )
                     db.add(proc)
+            elif item.category in ["INVESTIGATION", "LAB", "DIAGNOSTIC"]:
+                existing_obs = db.query(TraceObservation).filter(
+                    TraceObservation.encounter_key == encounter.encounter_key,
+                    TraceObservation.concept_code == item.code
+                ).first()
+                if not existing_obs:
+                    obs = TraceObservation(
+                        encounter_key=encounter.encounter_key,
+                        concept_code=item.code,
+                        concept_name=item.description,
+                        value_bucket="NORMAL",
+                        event_month=start_month
+                    )
+                    db.add(obs)
+            elif item.category in ["PHARMACY", "MEDICATION"]:
+                existing_med = db.query(TraceMedication).filter(
+                    TraceMedication.encounter_key == encounter.encounter_key,
+                    TraceMedication.concept_code == item.code
+                ).first()
+                if not existing_med:
+                    med = TraceMedication(
+                        encounter_key=encounter.encounter_key,
+                        concept_code=item.code,
+                        drug_class="INPATIENT_THERAPEUTIC",
+                        event_month=start_month
+                    )
+                    db.add(med)
 
-        # 6. Record Insurance Event ONLY if event_type is an insurance event
-        if event_type in INSURANCE_EVENT_TYPES or "CLAIM" in event_type or "PREAUTH" in event_type:
-            gross = sum(float(it.gross_amount) for it in case.line_items) if case.line_items else 0.0
-            covered = sum(float(it.decision.covered_amount) for it in case.line_items if it.decision) if case.line_items else 0.0
-            payable = sum(float(it.decision.patient_payable) for it in case.line_items if it.decision) if case.line_items else 0.0
+        # 6. Record Insurance Event ONLY if event_type is a genuine insurance event
+        if event_type in INSURANCE_EVENT_TYPES:
+            gross = sum(float(it.gross_amount) for it in (case.line_items or []))
+            decisions = case.decisions or []
+            covered = sum(float(d.covered_amount) for d in decisions)
+            payable = sum(float(d.patient_payable) for d in decisions)
 
             amount_bucket = "<25K"
             if gross > 250000:
@@ -201,7 +240,7 @@ class TraceEventService:
 
         # 7. Record Workflow Event for operational lifecycle progressions
         stage = "INTAKE"
-        if "SUBMIT" in event_type:
+        if "SUBMIT" in event_type or "PREAUTH" in event_type:
             stage = "PREAUTH"
         elif "EVALUAT" in event_type:
             stage = "EVALUATION"
@@ -219,3 +258,25 @@ class TraceEventService:
             event_month=start_month
         )
         db.add(wf_ev)
+
+        # 8. Record TraceOutcome upon case discharge
+        if event_type in ["CASE_DISCHARGED", "DISCHARGE", "CASE_SETTLED"]:
+            existing_out = db.query(TraceOutcome).filter(
+                TraceOutcome.encounter_key == encounter.encounter_key
+            ).first()
+            gross_tot = sum(float(it.gross_amount) for it in (case.line_items or []))
+            turnaround = 24.0
+            if case.admission_at and case.discharge_at:
+                turnaround = max(1.0, (case.discharge_at - case.admission_at).total_seconds() / 3600.0)
+            if not existing_out:
+                out = TraceOutcome(
+                    encounter_key=encounter.encounter_key,
+                    discharge_disposition="ROUTINE_HOME",
+                    total_gross_numeric=round(gross_tot, 2),
+                    turnaround_hours=round(turnaround, 1),
+                    event_month=end_month
+                )
+                db.add(out)
+            else:
+                existing_out.total_gross_numeric = round(gross_tot, 2)
+                existing_out.turnaround_hours = round(turnaround, 1)

@@ -17,7 +17,7 @@ interface UserSession {
 
 export function App() {
   const [userSession, setUserSession] = useState<UserSession | null>(null);
-  const [activePortal, setActivePortal] = useState<'hospital' | 'insurer' | 'patient'>('hospital');
+  const [activePortal, setActivePortal] = useState<'hospital' | 'insurer' | 'patient' | 'trace'>('hospital');
   const [selectedCaseId, setSelectedCaseId] = useState<string | undefined>(undefined);
   const [isMCPOpen, setIsMCPOpen] = useState<boolean>(false);
 
@@ -114,6 +114,14 @@ export function App() {
               onLogout={() => setUserSession(null)}
             />
           )}
+
+          {activePortal === 'trace' && (
+            <AdminDashboard
+              onLogout={() => setUserSession(null)}
+              userName={userSession?.name || 'Trace Researcher'}
+              initialTab="datasets"
+            />
+          )}
         </Suspense>
       </main>
 
@@ -132,7 +140,7 @@ export function App() {
             <span className="text-slate-300">•</span>
             <span className="text-emerald-700 font-semibold inline-flex items-center">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5 animate-pulse"></span>
-              ABDM & NHCX FHIR R4 Compliant
+              NHCX-Compatible Gateway & FHIR R4 Prototype
             </span>
             <span className="text-slate-300">•</span>
             <span className="text-slate-600">Cloud S3 Storage Active</span>

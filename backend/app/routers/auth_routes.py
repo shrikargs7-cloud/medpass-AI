@@ -1,10 +1,11 @@
 import hashlib
 import uuid
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Header
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from backend.app.config import settings
 from backend.app.db import get_db
 from backend.app.models.operational import Patient, Hospital, Insurer
 
@@ -132,4 +133,47 @@ def verify_session(token: str, role: str):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired session token."
         )
-    return {"valid": True, "role": role}
+    return {"valid": True, "role": role, "is_demo": settings.DEMO_MODE}
+
+def get_current_principal(authorization: Optional[str] = Header(None)):
+    """
+    Server-side authentication dependency.
+    Extracts Bearer token and verifies authorized role identity.
+    """
+    if not authorization:
+        if settings.DEMO_MODE:
+            return {"uid": "demo_admin", "role": "admin", "is_demo": True}
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required. Missing Authorization header."
+        )
+
+    token = authorization.replace("Bearer ", "").strip()
+    if not token.startswith("mp_"):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired session token."
+        )
+
+    # In demo mode, decode role tag
+    role = "hospital"
+    if "admin" in token or "usr" in token:
+        role = "admin"
+    elif "star" in token or "ins" in token:
+        role = "insurer"
+    elif "pat" in token:
+        role = "patient"
+    return {"uid": token, "role": role, "is_demo": settings.DEMO_MODE}
+
+def require_role(*allowed_roles: str):
+    """
+    Role-based access control dependency for FastAPI endpoints.
+    """
+    def dependency(principal: dict = Depends(get_current_principal)):
+        if principal["role"] not in allowed_roles and principal["role"] != "admin":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Access denied. Requires one of {allowed_roles}."
+            )
+        return principal
+    return dependency

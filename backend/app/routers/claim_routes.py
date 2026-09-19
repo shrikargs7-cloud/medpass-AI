@@ -17,6 +17,10 @@ class ClaimQueryCreate(BaseModel):
     category: str = "CLINICAL_JUSTIFICATION"
     reason: str
 
+class ClaimQueryRespondAction(BaseModel):
+    response_notes: str
+    document_ids: Optional[List[str]] = []
+
 class ClaimDecisionAction(BaseModel):
     decision_reason: Optional[str] = None
     approved_amount: Optional[float] = None
@@ -160,6 +164,71 @@ def raise_claim_query(claim_id: str, payload: ClaimQueryCreate, db: Session = De
         N8NWebhookDispatcher.dispatch_case_event("CLAIM_QUERIED", {"claim_id": claim.id, "case_number": case.case_number, "reason": payload.reason})
 
     return {"message": "Query raised successfully", "query_id": new_query.id, "status": "QUERIED"}
+
+@router.get("/{claim_id}/queries")
+def list_claim_queries(claim_id: str, db: Session = Depends(get_db)):
+    claim = db.query(Claim).filter(Claim.id == claim_id).first()
+    if not claim:
+        raise HTTPException(status_code=404, detail="Claim not found")
+    return [
+        {
+            "id": q.id,
+            "claim_id": q.claim_id,
+            "category": q.category,
+            "reason": q.reason,
+            "status": q.status,
+            "created_at": q.created_at,
+            "resolved_at": q.resolved_at
+        }
+        for q in (claim.queries or [])
+    ]
+
+@router.post("/{claim_id}/query/{query_id}/respond")
+def respond_to_claim_query(claim_id: str, query_id: str, payload: ClaimQueryRespondAction, db: Session = Depends(get_db)):
+    claim = db.query(Claim).filter(Claim.id == claim_id).first()
+    if not claim:
+        raise HTTPException(status_code=404, detail="Claim not found")
+
+    query = db.query(ClaimQuery).filter(ClaimQuery.id == query_id, ClaimQuery.claim_id == claim.id).first()
+    if not query:
+        raise HTTPException(status_code=404, detail="Query not found")
+
+    query.status = "RESPONDED"
+    query.resolved_at = datetime.utcnow()
+    claim.status = "QUERY_RESPONDED"
+
+    case = claim.case
+    if case:
+        case.case_status = "QUERY_RESPONDED"
+        case.authorization_status = "QUERY_RESPONDED"
+
+        # Resolve or update insurer query blocker
+        for b in (case.blockers or []):
+            if b.blocker_type == "INSURER_QUERY":
+                b.is_resolved = True
+                b.resolved_at = datetime.utcnow()
+
+    db.commit()
+
+    if case:
+        TraceEventService.record_event(
+            db, "CLAIM_QUERY_RESPONDED", case,
+            actor_role="HOSPITAL_STAFF",
+            extra_data={"query_id": query.id, "response_notes": payload.response_notes}
+        )
+        N8NWebhookDispatcher.dispatch_case_event("CLAIM_QUERY_RESPONDED", {
+            "claim_id": claim.id,
+            "case_number": case.case_number,
+            "query_id": query.id,
+            "response_notes": payload.response_notes
+        })
+
+    return {
+        "message": "Query response submitted to payer via NHCX gateway",
+        "claim_id": claim.id,
+        "query_id": query.id,
+        "status": "QUERY_RESPONDED"
+    }
 
 @router.post("/{claim_id}/approve")
 def approve_claim(claim_id: str, payload: ClaimDecisionAction, db: Session = Depends(get_db)):
