@@ -11,7 +11,7 @@ import {
   submitCasePreauth, resolveBlocker, uploadDocument, createCase,
   updateCase, deleteCase, addLineItem, updateLineItem, deleteLineItem,
   addBlocker, deleteBlocker, fetchAvailablePolicies, fetchClaims,
-  sendSmsNotification
+  sendSmsNotification, dischargeCase, respondClaimQuery, fetchClaimQueries
 } from '../api/client';
 import {
   ReadinessRing,
@@ -101,6 +101,11 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
   const [showAddLineItemModal, setShowAddLineItemModal] = useState(false);
   const [editingLineItem, setEditingLineItem] = useState<any | null>(null);
   const [showAddBlockerModal, setShowAddBlockerModal] = useState(false);
+  const [discharging, setDischarging] = useState(false);
+  const [showQueryRespondModal, setShowQueryRespondModal] = useState(false);
+  const [respondingQuery, setRespondingQuery] = useState(false);
+  const [queryResponseNotes, setQueryResponseNotes] = useState('');
+  const [activeQueryToRespond, setActiveQueryToRespond] = useState<any | null>(null);
 
   // New Case Form State
   const [newCaseForm, setNewCaseForm] = useState({
@@ -282,6 +287,61 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
       alert(err.message);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleDischarge = async () => {
+    if (!selectedCase) return;
+    try {
+      setDischarging(true);
+      const updated = await dischargeCase(selectedCase.id);
+      setSelectedCase(updated);
+      notify(`Case ${updated.case_number} has been officially discharged. Ready for patient checkout.`);
+      loadData(selectedCase.id);
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setDischarging(false);
+    }
+  };
+
+  const handleOpenQueryRespond = async () => {
+    if (!selectedCase) return;
+    try {
+      const anyCase = selectedCase as any;
+      const caseClaim = claims.find(c => c.case_id === selectedCase.id) || (anyCase.claims && anyCase.claims[0]);
+      if (caseClaim) {
+        const qList = await fetchClaimQueries(caseClaim.id);
+        const openQ = qList.find((q: any) => q.status === 'OPEN') || qList[0];
+        setActiveQueryToRespond(openQ ? { ...openQ, claim_id: caseClaim.id } : { claim_id: caseClaim.id });
+      }
+      setShowQueryRespondModal(true);
+    } catch (err: any) {
+      console.error(err);
+      setShowQueryRespondModal(true);
+    }
+  };
+
+  const handleSubmitQueryResponse = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedCase) return;
+    try {
+      setRespondingQuery(true);
+      const anyCase = selectedCase as any;
+      const caseClaim = claims.find(c => c.case_id === selectedCase.id) || (anyCase.claims && anyCase.claims[0]);
+      const claimId = activeQueryToRespond?.claim_id || caseClaim?.id;
+      const queryId = activeQueryToRespond?.id;
+      if (claimId && queryId) {
+        await respondClaimQuery(claimId, queryId, queryResponseNotes || 'Requested clinical investigation notes provided.');
+      }
+      setShowQueryRespondModal(false);
+      setQueryResponseNotes('');
+      notify('Query response submitted to payer via NHCX Gateway.');
+      loadData(selectedCase.id);
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setRespondingQuery(false);
     }
   };
 
@@ -555,9 +615,10 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
           <button
             onClick={() => setShowNewCaseModal(true)}
             className="flex items-center px-3.5 py-1.5 rounded-xl text-xs font-bold bg-teal-600 hover:bg-teal-700 text-white shadow-xs transition-all cursor-pointer"
+            title="Step 1: Create a new patient admission and case"
           >
             <Plus className="w-3.5 h-3.5 mr-1" />
-            New Admission
+            Step 1: + New Admission
           </button>
 
           <button
@@ -754,24 +815,62 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
                     </div>
                   </div>
 
-                  <div className="flex flex-col space-y-1.5">
+                  <div className="flex flex-col space-y-1.5 min-w-[190px]">
                     <button
                       onClick={handleEvaluate}
                       disabled={evaluating}
-                      className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold transition-all shadow-xs cursor-pointer flex items-center"
+                      className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center justify-between"
+                      title="Step 3: Run deterministic financial calculation engine across line items and policy rules"
                     >
-                      <Sparkles className="w-3.5 h-3.5 mr-1 text-teal-400" />
-                      {evaluating ? '...' : 'Recalculate'}
+                      <span className="flex items-center">
+                        <Sparkles className="w-3.5 h-3.5 mr-1.5 text-teal-400" />
+                        {evaluating ? 'Evaluating...' : 'Step 3: Evaluate Coverage'}
+                      </span>
                     </button>
 
                     <button
                       onClick={handleSubmitPreauth}
                       disabled={submitting}
-                      className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-semibold transition-all shadow-xs cursor-pointer flex items-center"
+                      className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center justify-between"
+                      title="Step 4: Transmit preauthorization packet to Insurer Gateway"
                     >
-                      <ArrowRight className="w-3.5 h-3.5 mr-1" />
-                      {submitting ? '...' : 'Submit'}
+                      <span className="flex items-center">
+                        <ArrowRight className="w-3.5 h-3.5 mr-1.5" />
+                        {submitting ? 'Submitting...' : 'Step 4: Submit Pre-Auth'}
+                      </span>
                     </button>
+
+                    {(selectedCase.case_status === 'QUERIED' || selectedCase.authorization_status === 'QUERY_RAISED' || selectedCase.blockers?.some(b => b.blocker_type === 'INSURER_QUERY' && !b.is_resolved)) && (
+                      <button
+                        onClick={handleOpenQueryRespond}
+                        className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center justify-between animate-pulse"
+                        title="Step 4b: Payer has raised a query. Click to provide clinical justification"
+                      >
+                        <span className="flex items-center">
+                          <MessageSquare className="w-3.5 h-3.5 mr-1.5" />
+                          Step 4b: Respond to Query
+                        </span>
+                      </button>
+                    )}
+
+                    {selectedCase.case_status === 'DISCHARGED' ? (
+                      <div className="px-3 py-1.5 bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl text-xs font-bold text-center flex items-center justify-center">
+                        <CheckCircle2 className="w-3.5 h-3.5 mr-1 text-emerald-600" />
+                        ✓ Patient Discharged
+                      </div>
+                    ) : (
+                      <button
+                        onClick={handleDischarge}
+                        disabled={discharging || (selectedCase.blockers?.some(b => !b.is_resolved && (b.severity === 'CRITICAL' || b.severity === 'HIGH')))}
+                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:bg-slate-200 disabled:text-slate-400 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center justify-between"
+                        title={selectedCase.blockers?.some(b => !b.is_resolved && (b.severity === 'CRITICAL' || b.severity === 'HIGH')) ? "Resolve critical blockers before authorizing discharge" : "Step 5: Authorize hospital discharge"}
+                      >
+                        <span className="flex items-center">
+                          <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" />
+                          {discharging ? 'Discharging...' : 'Step 5: Authorize Discharge'}
+                        </span>
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1261,7 +1360,7 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
                     className="flex items-center px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white text-xs font-bold shadow-xs transition-all cursor-pointer"
                   >
                     <UploadCloud className="w-3.5 h-3.5 mr-1.5" />
-                    {uploadingDoc ? 'Uploading...' : 'Upload Document'}
+                    {uploadingDoc ? 'Uploading...' : 'Step 2: Upload & Extract Bill'}
                   </button>
                 </div>
 
@@ -2070,6 +2169,70 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
                   className="px-4 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold flex items-center space-x-1.5 cursor-pointer shadow-xs"
                 >
                   {smsSending ? <span>Sending...</span> : <><Send className="w-3.5 h-3.5" /><span>Dispatch SMS</span></>}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Query Response Modal */}
+      {showQueryRespondModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in duration-200">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-4">
+              <div className="flex items-center space-x-2">
+                <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center">
+                  <MessageSquare className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-800 text-sm">Respond to Insurer / TPA Query</h3>
+                  <p className="text-[11px] text-slate-500">Provide requested clinical documents or notes via NHCX Gateway</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowQueryRespondModal(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {activeQueryToRespond?.reason && (
+              <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 mb-4 text-xs text-amber-900">
+                <span className="font-bold block mb-1">Payer Query:</span>
+                <p className="font-mono text-[11px]">{activeQueryToRespond.reason}</p>
+              </div>
+            )}
+
+            <form onSubmit={handleSubmitQueryResponse} className="space-y-4 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Clinical Response / Clarification Notes</label>
+                <textarea
+                  required
+                  rows={4}
+                  value={queryResponseNotes}
+                  onChange={(e) => setQueryResponseNotes(e.target.value)}
+                  placeholder="Enter detailed clinical clarification, diagnostic findings, or reference to uploaded investigation reports..."
+                  className="w-full p-3 rounded-xl border border-slate-200 resize-none font-sans text-xs bg-slate-50/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+
+              <div className="flex justify-end space-x-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowQueryRespondModal(false)}
+                  className="px-3.5 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-100 font-semibold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={respondingQuery || !queryResponseNotes.trim()}
+                  className="px-4 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white font-bold flex items-center space-x-1.5 cursor-pointer shadow-xs"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>{respondingQuery ? 'Submitting...' : 'Transmit Response to Payer'}</span>
                 </button>
               </div>
             </form>

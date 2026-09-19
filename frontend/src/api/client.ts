@@ -213,6 +213,34 @@ export async function acknowledgeClaim(claimId: string, payload: any): Promise<a
   return res.json();
 }
 
+export async function dischargeCase(caseId: string): Promise<CaseDetail> {
+  const res = await fetch(`${API_BASE}/cases/${caseId}/discharge`, { method: 'POST' });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Failed to authorize discharge');
+  }
+  return res.json();
+}
+
+export async function respondClaimQuery(claimId: string, queryId: string, responseNotes: string): Promise<any> {
+  const res = await fetch(`${API_BASE}/claims/${claimId}/query/${queryId}/respond`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ response_notes: responseNotes })
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Failed to submit query response');
+  }
+  return res.json();
+}
+
+export async function fetchClaimQueries(claimId: string): Promise<any[]> {
+  const res = await fetch(`${API_BASE}/claims/${claimId}/queries`);
+  if (!res.ok) throw new Error('Failed to fetch claim queries');
+  return res.json();
+}
+
 export async function fetchTraceOverview(): Promise<TraceOverview> {
   const res = await fetch(`${API_BASE}/trace/overview`);
   if (!res.ok) throw new Error('Failed to fetch trace overview');

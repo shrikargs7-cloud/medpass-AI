@@ -579,29 +579,35 @@ export const InsurerDashboard: React.FC = () => {
                     <div className="flex flex-wrap items-center gap-2">
                       <button
                         onClick={() => setAckModal(true)}
-                        className="px-3 py-1.5 bg-teal-600 text-white rounded-lg text-xs font-bold hover:bg-teal-700 transition-colors shadow-xs flex items-center space-x-1 cursor-pointer"
-                        title="Issue preauthorization acknowledgement with token"
+                        className="px-3 py-1.5 bg-teal-600 text-white rounded-lg text-xs font-bold hover:bg-teal-700 transition-colors shadow-xs flex items-center space-x-1.5 cursor-pointer"
+                        title="Step 1: Issue preauthorization acknowledgement with token"
                       >
                         <Award className="w-3.5 h-3.5" />
-                        <span>Issue Acknowledgement</span>
+                        <span>Step 1: Issue Acknowledgement</span>
                       </button>
                       <button
                         onClick={() => setQueryModal(true)}
-                        className="px-2.5 py-1.5 bg-amber-500 text-white rounded-lg text-xs font-semibold hover:bg-amber-600 transition-colors cursor-pointer"
+                        className="px-3 py-1.5 bg-amber-500 text-white rounded-lg text-xs font-bold hover:bg-amber-600 transition-colors shadow-xs flex items-center space-x-1.5 cursor-pointer"
+                        title="Step 2: Raise medical or billing query to hospital desk"
                       >
-                        Query
-                      </button>
-                      <button
-                        onClick={handleReject}
-                        className="px-2.5 py-1.5 bg-rose-600 text-white rounded-lg text-xs font-semibold hover:bg-rose-700 transition-colors cursor-pointer"
-                      >
-                        Reject
+                        <MessageSquare className="w-3.5 h-3.5" />
+                        <span>Step 2: Raise Query</span>
                       </button>
                       <button
                         onClick={handleApprove}
-                        className="px-2.5 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-semibold hover:bg-emerald-700 transition-colors cursor-pointer"
+                        className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 transition-colors shadow-xs flex items-center space-x-1.5 cursor-pointer"
+                        title="Step 3A: Approve cashless pre-authorization (Full or Partial claim)"
                       >
-                        Approve
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Step 3A: Approve Cashless</span>
+                      </button>
+                      <button
+                        onClick={handleReject}
+                        className="px-3 py-1.5 bg-rose-600 text-white rounded-lg text-xs font-bold hover:bg-rose-700 transition-colors shadow-xs flex items-center space-x-1.5 cursor-pointer"
+                        title="Step 3B: Repudiate / reject claim under policy exclusion terms"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                        <span>Step 3B: Reject Claim</span>
                       </button>
                     </div>
                   </div>

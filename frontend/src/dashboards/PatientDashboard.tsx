@@ -125,17 +125,19 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
             onClick={handleSendSmsSummary}
             disabled={smsSending}
             className="flex items-center px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs transition-all cursor-pointer border border-emerald-600 disabled:opacity-50"
+            title="Step 3: Send cashless summary SMS to patient mobile"
           >
             <Send className={`w-3.5 h-3.5 mr-1 ${smsSending ? 'animate-pulse' : ''}`} />
-            {smsSending ? 'Sending SMS...' : 'Send SMS Summary'}
+            {smsSending ? 'Sending SMS...' : 'Step 3: Send SMS Summary'}
           </button>
 
           <button
             onClick={handlePrint}
             className="flex items-center px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all cursor-pointer border border-slate-200"
+            title="Step 3: Print official discharge clearance certificate"
           >
             <Printer className="w-3.5 h-3.5 mr-1" />
-            Print
+            Step 3: Print Discharge Pass
           </button>
 
           {onLogout && (
@@ -147,6 +149,31 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
               Switch
             </button>
           )}
+        </div>
+      </div>
+
+      {/* 3-Step Navigation Flow for Patient Transparency */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-3 bg-white rounded-2xl border border-slate-200 shadow-2xs text-xs">
+        <div className="flex items-center space-x-2.5 p-2 rounded-xl bg-teal-50/70 border border-teal-100">
+          <span className="w-6 h-6 rounded-lg bg-teal-600 text-white font-black text-[11px] flex items-center justify-center">1</span>
+          <div>
+            <div className="font-bold text-teal-950">Step 1: Check Pre-Auth Status</div>
+            <div className="text-[11px] text-teal-700">Cashless approval / query status</div>
+          </div>
+        </div>
+        <div className="flex items-center space-x-2.5 p-2 rounded-xl bg-slate-50 border border-slate-200">
+          <span className="w-6 h-6 rounded-lg bg-slate-700 text-white font-black text-[11px] flex items-center justify-center">2</span>
+          <div>
+            <div className="font-bold text-slate-800">Step 2: Review Bill & Copay</div>
+            <div className="text-[11px] text-slate-500">Itemized ledger & patient payable</div>
+          </div>
+        </div>
+        <div className="flex items-center space-x-2.5 p-2 rounded-xl bg-slate-50 border border-slate-200">
+          <span className="w-6 h-6 rounded-lg bg-slate-700 text-white font-black text-[11px] flex items-center justify-center">3</span>
+          <div>
+            <div className="font-bold text-slate-800">Step 3: Discharge Clearance</div>
+            <div className="text-[11px] text-slate-500">SMS alert & departure pass</div>
+          </div>
         </div>
       </div>
 

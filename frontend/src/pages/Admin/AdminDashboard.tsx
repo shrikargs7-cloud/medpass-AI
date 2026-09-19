@@ -1479,7 +1479,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, userNa
                   className="flex items-center px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold shadow-xs transition-all cursor-pointer"
                 >
                   <Plus className="w-4 h-4 mr-1.5" />
-                  Create Governed Dataset Version
+                  Step 1: + Create Dataset Version
                 </button>
               </div>
 
@@ -1543,9 +1543,38 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, userNa
                               }
                             }}
                             className="px-2.5 py-1 rounded-lg border border-teal-200 bg-teal-50 hover:bg-teal-100 text-teal-800 font-bold cursor-pointer inline-flex items-center space-x-1"
+                            title="Step 2: Export cohort table as CSV archive"
                           >
                             <Download className="w-3.5 h-3.5" />
-                            <span>Export .CSV</span>
+                            <span>Step 2: Export CSV</span>
+                          </button>
+                          <button
+                            onClick={async () => {
+                              try {
+                                notify(`Generating Parquet analytical export for dataset version ${ds.version || 'v2026.1'}...`);
+                                const exportRes = await createExportJob({
+                                  dataset_version: ds.version || 'trace-core-1.3.0',
+                                  facility_keys: [],
+                                  diagnosis_codes: [],
+                                  procedure_categories: [],
+                                  age_bands: [],
+                                  sex_categories: [],
+                                  format: 'parquet',
+                                  journey_mode: 'whole_journey'
+                                });
+                                notify(`✓ Parquet Dataset Export ready! Downloading ${exportRes.download_url}...`);
+                                if (exportRes.download_url) {
+                                  window.open(exportRes.download_url, '_blank');
+                                }
+                              } catch (err: any) {
+                                alert(err.message || 'Export failed');
+                              }
+                            }}
+                            className="px-2.5 py-1 rounded-lg border border-purple-200 bg-purple-50 hover:bg-purple-100 text-purple-800 font-bold cursor-pointer inline-flex items-center space-x-1"
+                            title="Step 3: Export cohort tables as columnar Parquet file"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                            <span>Step 3: Export Parquet</span>
                           </button>
                         </td>
                       </tr>
