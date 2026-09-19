@@ -1,6 +1,6 @@
 <div align="center">
   
-# 🏥 MedPass AI & Trace Commons
+# 🏥 MedPass AI 
   
 **Next-Generation Healthcare Workflow & Anonymous Data Platform**
 
