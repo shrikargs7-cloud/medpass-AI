@@ -648,11 +648,15 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
                             <span className="font-semibold text-rose-700 px-1.5 py-0.2 rounded bg-rose-50 border border-rose-200 text-[10px]">
                               No Claim
                             </span>
-                          ) : (c.total_gross > 0 && c.total_covered >= c.total_gross) ? (
+                          ) : (c.authorization_status === 'PENDING' || c.authorization_status === 'PREAUTH_REQUESTED' || c.case_status === 'SUBMITTED') ? (
+                            <span className="font-semibold text-sky-700 px-1.5 py-0.2 rounded bg-sky-50 border border-sky-200 text-[10px]">
+                              Awaiting Insurer
+                            </span>
+                          ) : (c.authorization_status === 'APPROVED' && c.total_gross > 0 && c.total_covered >= c.total_gross) ? (
                             <span className="font-semibold text-emerald-700 px-1.5 py-0.2 rounded bg-emerald-50 border border-emerald-200 text-[10px]">
                               Full Claim
                             </span>
-                          ) : (c.total_covered > 0 && c.total_covered < c.total_gross) ? (
+                          ) : (c.authorization_status === 'APPROVED' && c.total_covered > 0 && c.total_covered < c.total_gross) ? (
                             <span className="font-semibold text-amber-700 px-1.5 py-0.2 rounded bg-amber-50 border border-amber-200 text-[10px]">
                               Partial Claim
                             </span>
@@ -713,11 +717,15 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
                       <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-200">
                         🔴 No Claim (Denied / 0%)
                       </span>
-                    ) : (selectedCase.total_gross > 0 && selectedCase.total_covered >= selectedCase.total_gross) ? (
+                    ) : (selectedCase.authorization_status === 'PENDING' || selectedCase.authorization_status === 'PREAUTH_REQUESTED' || selectedCase.case_status === 'SUBMITTED') ? (
+                      <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-sky-100 text-sky-800 border border-sky-200">
+                        ⏳ Awaiting Insurer Pre-Auth
+                      </span>
+                    ) : (selectedCase.authorization_status === 'APPROVED' && selectedCase.total_gross > 0 && selectedCase.total_covered >= selectedCase.total_gross) ? (
                       <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
                         🟢 Full Claim (100% Covered)
                       </span>
-                    ) : (selectedCase.total_covered > 0 && selectedCase.total_covered < selectedCase.total_gross) ? (
+                    ) : (selectedCase.authorization_status === 'APPROVED' && selectedCase.total_covered > 0 && selectedCase.total_covered < selectedCase.total_gross) ? (
                       <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
                         🟡 Partial Claim ({Math.round(((selectedCase.total_covered || 0) / (selectedCase.total_gross || 1)) * 100)}% Covered)
                       </span>
@@ -961,10 +969,40 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
                         PENDING INFO
                       </span>
                     </div>
+                  ) : selectedCase.authorization_status === 'APPROVED' ? (
+                    <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between text-xs text-emerald-800">
+                      <span className="text-[11px] font-semibold flex items-center">
+                        <CheckCircle2 className="w-3.5 h-3.5 mr-1 text-emerald-600" />
+                        Payer Pre-Authorization: Approved Cashless by Insurer.
+                      </span>
+                      <span className="px-2 py-0.5 rounded bg-emerald-100 font-bold text-[10px] text-emerald-800">
+                        APPROVED
+                      </span>
+                    </div>
+                  ) : selectedCase.authorization_status === 'PREAUTH_REQUESTED' || selectedCase.case_status === 'SUBMITTED' ? (
+                    <div className="p-2.5 bg-sky-50 border border-sky-200 rounded-xl flex items-center justify-between text-xs text-sky-800">
+                      <span className="text-[11px] font-semibold flex items-center">
+                        <Clock className="w-3.5 h-3.5 mr-1 text-sky-600 animate-spin" />
+                        Payer Pre-Authorization: Transmitted. Awaiting Insurer Review & Approval.
+                      </span>
+                      <span className="px-2 py-0.5 rounded bg-sky-100 font-bold text-[10px] text-sky-800">
+                        UNDER REVIEW
+                      </span>
+                    </div>
+                  ) : selectedCase.authorization_status === 'REJECTED' ? (
+                    <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl flex items-center justify-between text-xs text-rose-800">
+                      <span className="text-[11px] font-semibold flex items-center">
+                        <AlertTriangle className="w-3.5 h-3.5 mr-1 text-rose-600" />
+                        Payer Pre-Authorization: Rejected by Insurer.
+                      </span>
+                      <span className="px-2 py-0.5 rounded bg-rose-100 font-bold text-[10px] text-rose-800">
+                        DENIED
+                      </span>
+                    </div>
                   ) : (
                     <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between text-xs text-slate-600">
                       <span className="text-[11px]">
-                        Payer Pre-Authorization: {selectedCase.authorization_status === 'APPROVED' ? 'Approved' : 'Pending Submission/Adjudication'}.
+                        Payer Pre-Authorization: Pending Submission to Insurer.
                       </span>
                       <button
                         onClick={handleSubmitPreauth}
@@ -1059,7 +1097,7 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
                         </div>
                       </div>
 
-                      {dec && (
+                      {selectedCase.authorization_status === 'APPROVED' && dec ? (
                         <div className="mt-2 pt-1.5 border-t border-slate-200/80 flex items-center justify-between text-[11px]">
                           <span className="text-emerald-700 font-semibold font-mono">
                             Covered: ₹{dec.covered_amount.toLocaleString('en-IN')}
@@ -1070,6 +1108,11 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
                           <span className="text-[10px] text-slate-500 font-mono">
                             {dec.rule_id || 'RULE_APPLIED'}
                           </span>
+                        </div>
+                      ) : (
+                        <div className="mt-2 pt-1.5 border-t border-slate-200/80 flex items-center justify-between text-[11px] text-slate-400">
+                          <span className="italic">Awaiting Insurer Pre-Authorization</span>
+                          <span className="font-mono text-slate-500 font-medium">Pending Payer Approval</span>
                         </div>
                       )}
                     </div>

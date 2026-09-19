@@ -101,8 +101,19 @@ def create_case(payload: CaseCreate, db: Session = Depends(get_db)):
             description=b["description"],
             action_required=b.get("action_required")
         )
-        db.add(blocker_rec)
-
+    # 6. Create initial inbound Claim in SUBMITTED / PENDING state so insurer person can review & adjudicate it
+    total_gross = sum(float(it.unit_amount * it.quantity) for it in payload.line_items)
+    new_claim = Claim(
+        case_id=new_case.id,
+        external_reference=f"CLM-INBOUND-{new_case.case_number.split('-')[-1]}",
+        status="SUBMITTED",
+        claim_type="PENDING",
+        total_claimed=total_gross or 45000.0,
+        covered_amount=0.0,
+        patient_payable=total_gross or 45000.0,
+        adjudication_reason="New hospital admission intake complete. Awaiting insurer medical review and pre-authorization approval."
+    )
+    db.add(new_claim)
     db.commit()
 
     # Record outbox domain event
@@ -128,11 +139,15 @@ def list_cases(
     # Compute totals dynamically for response
     for c in cases:
         gross = sum(float(i.gross_amount) for i in (c.line_items or []))
-        covered = sum(float(d.covered_amount) for d in (c.decisions or []))
-        payable = sum(float(d.patient_payable) for d in (c.decisions or []))
+        if c.authorization_status == "APPROVED":
+            covered = sum(float(d.covered_amount) for d in (c.decisions or []))
+            payable = sum(float(d.patient_payable) for d in (c.decisions or []))
+        else:
+            covered = 0.0
+            payable = gross
         c.total_gross = gross
         c.total_covered = covered
-        c.total_patient_payable = payable if covered > 0 else gross
+        c.total_patient_payable = payable
 
     return cases
 
@@ -143,11 +158,15 @@ def get_case_detail(case_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Case not found")
 
     gross = sum(float(i.gross_amount) for i in (case.line_items or []))
-    covered = sum(float(d.covered_amount) for d in (case.decisions or []))
-    payable = sum(float(d.patient_payable) for d in (case.decisions or []))
+    if case.authorization_status == "APPROVED":
+        covered = sum(float(d.covered_amount) for d in (case.decisions or []))
+        payable = sum(float(d.patient_payable) for d in (case.decisions or []))
+    else:
+        covered = 0.0
+        payable = gross
     case.total_gross = gross
     case.total_covered = covered
-    case.total_patient_payable = payable if covered > 0 else gross
+    case.total_patient_payable = payable
 
     return case
 
@@ -172,79 +191,72 @@ def discharge_case(case_id: str, db: Session = Depends(get_db)):
 @router.post("/{case_id}/submit")
 async def submit_case_preauth(
     case_id: str,
-    scenario: str = Query("SUCCESS", description="Beeceptor mock scenario: SUCCESS, QUERY, REJECTION, TIMEOUT, 500"),
+    scenario: str = Query("PENDING", description="Beeceptor mock scenario: PENDING, SUCCESS, QUERY, REJECTION, TIMEOUT, 500"),
     db: Session = Depends(get_db)
 ):
     case = db.query(Case).filter(Case.id == case_id).first()
     if not case:
         raise HTTPException(status_code=404, detail="Case not found")
 
-    # Call Beeceptor integration adapter
-    case_payload = {
-        "case_number": case.case_number,
-        "hospital_id": case.hospital_id,
-        "diagnosis_code": case.primary_diagnosis_code,
-        "line_items_count": len(case.line_items or []),
-        "estimated_covered": sum(float(d.covered_amount) for d in (case.decisions or [])) or 45000.0
-    }
+    gross = sum(float(i.gross_amount) for i in (case.line_items or []))
+    tx_ref = f"BEE-PREAUTH-{str(uuid.uuid4())[:8].upper()}"
 
-    beeceptor_resp = await BeeceptorIntegrationClient.submit_preauthorization(case_payload, scenario)
+    # Set case state to SUBMITTED awaiting insurance officer adjudication
+    case.case_status = "SUBMITTED"
+    case.authorization_status = "PREAUTH_REQUESTED"
 
-    # Update case state based on Beeceptor response
-    if beeceptor_resp.get("status") == "APPROVED":
-        case.case_status = "APPROVED"
-        case.authorization_status = "APPROVED"
-        # Resolve insurance authorization blocker
-        for b in (case.blockers or []):
-            if b.blocker_type == "INSURANCE_AUTHORIZATION":
-                b.is_resolved = True
-                b.resolved_at = datetime.utcnow()
-    elif beeceptor_resp.get("status") == "QUERY_RAISED":
-        case.case_status = "QUERIED"
-        case.authorization_status = "QUERY_RAISED"
-        # Add query blocker
-        q_blocker = DischargeBlocker(
+    # Ensure an active insurance blocker is present indicating awaiting insurer approval
+    has_auth_blocker = any(b.blocker_type == "INSURANCE_AUTHORIZATION" and not b.is_resolved for b in (case.blockers or []))
+    if not has_auth_blocker:
+        auth_blocker = DischargeBlocker(
             case_id=case.id,
-            blocker_type="INSURER_QUERY",
-            severity="CRITICAL",
-            owner_role="HOSPITAL_STAFF",
-            description=beeceptor_resp.get("query_text", "Insurer requested additional records."),
-            action_required=beeceptor_resp.get("required_action")
+            blocker_type="INSURANCE_AUTHORIZATION",
+            severity="HIGH",
+            owner_role="INSURER_REVIEWER",
+            description="Awaiting pre-authorization review and approval from insurance officer.",
+            action_required="Insurance officer must review medical records and issue cashless clearance or query."
         )
-        db.add(q_blocker)
-    elif beeceptor_resp.get("status") == "REJECTED":
-        case.case_status = "REJECTED"
-        case.authorization_status = "REJECTED"
-    else:
-        # Timeout or 500 error scenario
-        case.case_status = "SUBMISSION_PENDING_RETRY"
+        db.add(auth_blocker)
 
-    # Create Claim record
-    claim = Claim(
-        case_id=case.id,
-        external_reference=beeceptor_resp.get("external_reference"),
-        status=case.authorization_status,
-        total_claimed=case_payload["estimated_covered"],
-        covered_amount=case_payload["estimated_covered"] if case.authorization_status == "APPROVED" else 0.0,
-        patient_payable=0.0
-    )
-    db.add(claim)
+    # Find existing claim or create new inbound claim in SUBMITTED state
+    claim = db.query(Claim).filter(Claim.case_id == case.id).first()
+    if not claim:
+        claim = Claim(
+            case_id=case.id,
+            external_reference=tx_ref,
+            status="SUBMITTED",
+            claim_type="PENDING",
+            total_claimed=gross or 45000.0,
+            covered_amount=0.0,
+            patient_payable=gross or 45000.0,
+            adjudication_reason="Pre-authorization dossier transmitted by hospital. Awaiting adjudication and decision from insurance person."
+        )
+        db.add(claim)
+    else:
+        claim.status = "SUBMITTED"
+        claim.claim_type = "PENDING"
+        claim.total_claimed = gross or claim.total_claimed
+        claim.covered_amount = 0.0
+        claim.patient_payable = claim.total_claimed
+        claim.adjudication_reason = "Pre-authorization dossier transmitted by hospital. Awaiting adjudication and decision from insurance person."
+
     db.commit()
 
     TraceEventService.record_event(
-        db, f"CLAIM_{case.authorization_status}", case, actor_role="INSURER_REVIEWER", extra_data=beeceptor_resp
+        db, "PREAUTH_TRANSMITTED", case, actor_role="HOSPITAL_STAFF", extra_data={"reference": claim.external_reference}
     )
-    N8NWebhookDispatcher.dispatch_case_event(f"CLAIM_{case.authorization_status}", {
+    N8NWebhookDispatcher.dispatch_case_event("PREAUTH_TRANSMITTED", {
         "case_number": case.case_number,
-        "external_reference": beeceptor_resp.get("external_reference"),
-        "status": case.authorization_status
+        "external_reference": claim.external_reference,
+        "status": "SUBMITTED"
     })
 
     return {
         "case_id": case.id,
         "case_number": case.case_number,
         "authorization_status": case.authorization_status,
-        "beeceptor_response": beeceptor_resp
+        "status": "SUBMITTED",
+        "message": "Pre-authorization transmitted to Insurer Gateway. Awaiting review and decision by insurance officer."
     }
 
 @router.post("/{case_id}/resolve-blocker/{blocker_id}")

@@ -6,8 +6,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from backend.app.db import get_db
-from backend.app.models.operational import Claim, ClaimQuery, Case, DischargeBlocker
+from backend.app.models.operational import Claim, ClaimQuery, Case, DischargeBlocker, CoverageDecision
 from backend.app.services.trace_event_service import TraceEventService
+from backend.app.services.case_workflow_service import CaseWorkflowService
 from backend.app.integrations.n8n.dispatcher import N8NWebhookDispatcher
 
 router = APIRouter(prefix="/claims", tags=["Claims"])
@@ -168,13 +169,50 @@ def approve_claim(claim_id: str, payload: ClaimDecisionAction, db: Session = Dep
 
     claim.status = "APPROVED"
     claim.decided_at = datetime.utcnow()
+    total = float(claim.total_claimed or 0.0)
     if payload.approved_amount is not None:
-        claim.covered_amount = payload.approved_amount
+        claim.covered_amount = float(payload.approved_amount)
+    else:
+        claim.covered_amount = total
+
+    claim.patient_payable = max(0.0, total - claim.covered_amount)
+    if claim.covered_amount >= total and total > 0:
+        claim.claim_type = "FULL_CLAIM"
+    elif claim.covered_amount > 0:
+        claim.claim_type = "PARTIAL_CLAIM"
+    else:
+        claim.claim_type = "NO_CLAIM"
 
     case = claim.case
     if case:
         case.case_status = "APPROVED"
         case.authorization_status = "APPROVED"
+
+        # Clear previous decisions and populate fresh CoverageDecision records for line items
+        db.query(CoverageDecision).filter(CoverageDecision.case_id == case.id).delete()
+        db.flush()
+
+        ratio = (claim.covered_amount / total) if total > 0 else 1.0
+        for li in (case.line_items or []):
+            gross = float(li.gross_amount or 0.0)
+            it_covered = round(gross * ratio, 2)
+            it_payable = max(0.0, round(gross - it_covered, 2))
+            dec_status = "COVERED" if it_covered >= gross else ("EXCLUDED" if it_covered == 0 else "PARTIALLY_COVERED")
+
+            decision = CoverageDecision(
+                case_id=case.id,
+                line_item_id=li.id,
+                decision_status=dec_status,
+                eligible_amount=gross,
+                covered_amount=it_covered,
+                patient_payable=it_payable,
+                confidence=1.0,
+                rule_id="INSURER_CLEARANCE",
+                policy_field="PREAUTH_APPROVED",
+                requires_human_review=False,
+                explanation=f"Preauthorization approved by payer ({claim.external_reference or 'Cashless Clearance'})."
+            )
+            db.add(decision)
 
         # Resolve insurer blockers
         for b in (case.blockers or []):
@@ -199,11 +237,19 @@ def reject_claim(claim_id: str, payload: ClaimDecisionAction, db: Session = Depe
     claim.status = "REJECTED"
     claim.decided_at = datetime.utcnow()
     claim.covered_amount = 0.0
+    claim.patient_payable = float(claim.total_claimed or 0.0)
+    claim.claim_type = "NO_CLAIM"
 
     case = claim.case
     if case:
         case.case_status = "REJECTED"
         case.authorization_status = "REJECTED"
+
+        for d in (case.decisions or []):
+            d.covered_amount = 0.0
+            d.patient_payable = d.line_item.gross_amount if d.line_item else (d.eligible_amount or 0.0)
+            d.decision_status = "EXCLUDED"
+            d.explanation = f"Pre-authorization rejected by payer: {payload.decision_reason or 'Policy exclusion'}"
 
     db.commit()
 
@@ -223,20 +269,71 @@ def acknowledge_claim(claim_id: str, payload: ClaimAcknowledgeAction, db: Sessio
     claim.external_reference = ack_token
     claim.status = payload.status
     claim.decided_at = datetime.utcnow()
-    if payload.approved_amount is not None:
-        claim.covered_amount = payload.approved_amount
+    total = float(claim.total_claimed or 0.0)
 
     case = claim.case
-    if case:
-        case.authorization_status = payload.status
-        if payload.status == "APPROVED":
+    if payload.status == "APPROVED":
+        if payload.approved_amount is not None:
+            claim.covered_amount = float(payload.approved_amount)
+        else:
+            claim.covered_amount = total
+        claim.patient_payable = max(0.0, total - claim.covered_amount)
+        if claim.covered_amount >= total and total > 0:
+            claim.claim_type = "FULL_CLAIM"
+        elif claim.covered_amount > 0:
+            claim.claim_type = "PARTIAL_CLAIM"
+        else:
+            claim.claim_type = "NO_CLAIM"
+
+        if case:
             case.case_status = "APPROVED"
+            case.authorization_status = "APPROVED"
+
+            # Clear previous decisions and populate fresh CoverageDecision records for line items
+            db.query(CoverageDecision).filter(CoverageDecision.case_id == case.id).delete()
+            db.flush()
+
+            ratio = (claim.covered_amount / total) if total > 0 else 1.0
+            for li in (case.line_items or []):
+                gross = float(li.gross_amount or 0.0)
+                it_covered = round(gross * ratio, 2)
+                it_payable = max(0.0, round(gross - it_covered, 2))
+                dec_status = "COVERED" if it_covered >= gross else ("EXCLUDED" if it_covered == 0 else "PARTIALLY_COVERED")
+
+                decision = CoverageDecision(
+                    case_id=case.id,
+                    line_item_id=li.id,
+                    decision_status=dec_status,
+                    eligible_amount=gross,
+                    covered_amount=it_covered,
+                    patient_payable=it_payable,
+                    confidence=1.0,
+                    rule_id="INSURER_CLEARANCE",
+                    policy_field="PREAUTH_APPROVED",
+                    requires_human_review=False,
+                    explanation=f"Preauthorization acknowledged by payer ({ack_token})."
+                )
+                db.add(decision)
+
             for b in (case.blockers or []):
                 if b.blocker_type in ["INSURANCE_AUTHORIZATION", "INSURER_QUERY"]:
                     b.is_resolved = True
                     b.resolved_at = datetime.utcnow()
-        elif payload.status == "QUERY_RAISED":
+    elif payload.status == "REJECTED":
+        claim.covered_amount = 0.0
+        claim.patient_payable = total
+        claim.claim_type = "NO_CLAIM"
+        if case:
+            case.case_status = "REJECTED"
+            case.authorization_status = "REJECTED"
+            for d in (case.decisions or []):
+                d.covered_amount = 0.0
+                d.patient_payable = d.line_item.gross_amount if d.line_item else (d.eligible_amount or 0.0)
+                d.decision_status = "EXCLUDED"
+    elif payload.status == "QUERY_RAISED":
+        if case:
             case.case_status = "QUERIED"
+            case.authorization_status = "QUERY_RAISED"
             blocker = DischargeBlocker(
                 case_id=case.id,
                 blocker_type="INSURER_QUERY",

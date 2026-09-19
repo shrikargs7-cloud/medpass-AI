@@ -90,9 +90,13 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
         <div>
           <div className="flex items-center space-x-2">
             <span className="text-xs font-mono font-bold text-slate-500">{patientCase.case_number}</span>
-            {patientCase.authorization_status === 'REJECTED' || (patientCase.total_gross > 0 && patientCase.total_covered === 0) ? (
+            {patientCase.authorization_status === 'REJECTED' ? (
               <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-200">
                 ✕ NO CLAIM (REJECTED / 0% COVERAGE)
+              </span>
+            ) : (patientCase.authorization_status === 'PENDING' || patientCase.authorization_status === 'PREAUTH_REQUESTED' || patientCase.case_status === 'SUBMITTED') ? (
+              <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-sky-100 text-sky-800 border border-sky-200">
+                ⏳ PRE-AUTH UNDER REVIEW BY INSURER
               </span>
             ) : percentCovered === 100 ? (
               <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
@@ -259,53 +263,71 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
           </div>
 
           <div className={`${
-            percentCovered === 0 || patientCase.authorization_status === 'REJECTED'
+            patientCase.authorization_status === 'REJECTED'
               ? 'bg-rose-50/70 border-rose-200'
-              : 'bg-emerald-50/70 border-emerald-200'
+              : (patientCase.authorization_status === 'PENDING' || patientCase.authorization_status === 'PREAUTH_REQUESTED' || patientCase.case_status === 'SUBMITTED')
+                ? 'bg-sky-50/70 border-sky-200'
+                : 'bg-emerald-50/70 border-emerald-200'
           } p-4 rounded-2xl border shadow-2xs flex flex-col justify-center`}>
             <span className={`text-[10px] font-bold ${
-              percentCovered === 0 || patientCase.authorization_status === 'REJECTED' ? 'text-rose-800' : 'text-emerald-800'
+              patientCase.authorization_status === 'REJECTED' ? 'text-rose-800' :
+              (patientCase.authorization_status === 'PENDING' || patientCase.authorization_status === 'PREAUTH_REQUESTED' || patientCase.case_status === 'SUBMITTED') ? 'text-sky-800' : 'text-emerald-800'
             } uppercase tracking-wider flex items-center`}>
-              <ShieldCheck className={`w-3.5 h-3.5 mr-1 ${percentCovered === 0 || patientCase.authorization_status === 'REJECTED' ? 'text-rose-600' : 'text-emerald-600'}`} />
+              <ShieldCheck className={`w-3.5 h-3.5 mr-1 ${
+                patientCase.authorization_status === 'REJECTED' ? 'text-rose-600' :
+                (patientCase.authorization_status === 'PENDING' || patientCase.authorization_status === 'PREAUTH_REQUESTED' || patientCase.case_status === 'SUBMITTED') ? 'text-sky-600' : 'text-emerald-600'
+              }`} />
               Insurance Covered
             </span>
             <div className={`text-2xl font-black ${
-              percentCovered === 0 || patientCase.authorization_status === 'REJECTED' ? 'text-rose-700' : 'text-emerald-700'
+              patientCase.authorization_status === 'REJECTED' ? 'text-rose-700' :
+              (patientCase.authorization_status === 'PENDING' || patientCase.authorization_status === 'PREAUTH_REQUESTED' || patientCase.case_status === 'SUBMITTED') ? 'text-sky-700' : 'text-emerald-700'
             } font-mono mt-1`}>
-              ₹{patientCase.total_covered.toLocaleString('en-IN')}
+              ₹{patientCase.authorization_status === 'APPROVED' ? patientCase.total_covered.toLocaleString('en-IN') : '0'}
             </div>
             <span className={`text-[10px] ${
-              percentCovered === 0 || patientCase.authorization_status === 'REJECTED' ? 'text-rose-700 font-semibold' : 'text-emerald-700 font-medium'
+              patientCase.authorization_status === 'REJECTED' ? 'text-rose-700 font-semibold' :
+              (patientCase.authorization_status === 'PENDING' || patientCase.authorization_status === 'PREAUTH_REQUESTED' || patientCase.case_status === 'SUBMITTED') ? 'text-sky-700 font-semibold' : 'text-emerald-700 font-medium'
             } mt-1`}>
-              {percentCovered === 0 || patientCase.authorization_status === 'REJECTED'
+              {patientCase.authorization_status === 'REJECTED'
                 ? '0% Repudiated / No Coverage'
-                : `${percentCovered}% Cashless Settlement`}
+                : (patientCase.authorization_status === 'PENDING' || patientCase.authorization_status === 'PREAUTH_REQUESTED' || patientCase.case_status === 'SUBMITTED')
+                  ? 'Awaiting Insurer Pre-Auth Approval'
+                  : `${percentCovered}% Cashless Settlement`}
             </span>
           </div>
 
           <div className={`col-span-2 ${
-            percentCovered === 0 || patientCase.authorization_status === 'REJECTED'
+            patientCase.authorization_status === 'REJECTED'
               ? 'bg-rose-50/70 border-rose-200'
-              : 'bg-amber-50/70 border-amber-200'
+              : (patientCase.authorization_status === 'PENDING' || patientCase.authorization_status === 'PREAUTH_REQUESTED' || patientCase.case_status === 'SUBMITTED')
+                ? 'bg-slate-50/80 border-slate-200'
+                : 'bg-amber-50/70 border-amber-200'
           } p-4 rounded-2xl border shadow-2xs flex items-center justify-between`}>
             <div>
               <span className={`text-[10px] font-bold ${
-                percentCovered === 0 || patientCase.authorization_status === 'REJECTED' ? 'text-rose-900' : 'text-amber-900'
+                patientCase.authorization_status === 'REJECTED' ? 'text-rose-900' :
+                (patientCase.authorization_status === 'PENDING' || patientCase.authorization_status === 'PREAUTH_REQUESTED' || patientCase.case_status === 'SUBMITTED') ? 'text-slate-700' : 'text-amber-900'
               } uppercase tracking-wider`}>
                 Patient Out-of-Pocket Due at Discharge
               </span>
               <div className={`text-2xl font-black ${
-                percentCovered === 0 || patientCase.authorization_status === 'REJECTED' ? 'text-rose-800' : 'text-amber-800'
+                patientCase.authorization_status === 'REJECTED' ? 'text-rose-800' :
+                (patientCase.authorization_status === 'PENDING' || patientCase.authorization_status === 'PREAUTH_REQUESTED' || patientCase.case_status === 'SUBMITTED') ? 'text-slate-800' : 'text-amber-800'
               } font-mono mt-0.5`}>
-                ₹{patientCase.total_patient_payable.toLocaleString('en-IN')}
+                ₹{(patientCase.authorization_status === 'APPROVED' ? patientCase.total_patient_payable : patientCase.total_gross).toLocaleString('en-IN')}
               </div>
             </div>
             <span className={`text-[11px] font-bold px-3 py-1 rounded-xl ${
-              percentCovered === 0 || patientCase.authorization_status === 'REJECTED'
+              patientCase.authorization_status === 'REJECTED'
                 ? 'bg-rose-200/80 text-rose-900'
-                : 'bg-amber-200/80 text-amber-900'
+                : (patientCase.authorization_status === 'PENDING' || patientCase.authorization_status === 'PREAUTH_REQUESTED' || patientCase.case_status === 'SUBMITTED')
+                  ? 'bg-sky-100 text-sky-800'
+                  : 'bg-amber-200/80 text-amber-900'
             }`}>
-              {100 - percentCovered}% Your Share
+              {(patientCase.authorization_status === 'PENDING' || patientCase.authorization_status === 'PREAUTH_REQUESTED' || patientCase.case_status === 'SUBMITTED')
+                ? 'Pending Insurer Approval'
+                : `${100 - percentCovered}% Your Share`}
             </span>
           </div>
         </div>
@@ -349,10 +371,10 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
                   </div>
                   <div className="text-[11px] mt-0.5">
                     <span className="text-emerald-700 font-semibold mr-2">
-                      Covered: ₹{dec ? dec.covered_amount.toLocaleString('en-IN') : item.gross_amount.toLocaleString('en-IN')}
+                      Covered: ₹{patientCase.authorization_status === 'APPROVED' && dec ? dec.covered_amount.toLocaleString('en-IN') : '0'}
                     </span>
-                    <span className={isCovered ? 'text-slate-300' : 'text-amber-800 font-bold'}>
-                      You: ₹{dec ? dec.patient_payable.toLocaleString('en-IN') : '0'}
+                    <span className={patientCase.authorization_status === 'APPROVED' && dec && dec.patient_payable === 0 ? 'text-slate-300' : 'text-amber-800 font-bold'}>
+                      You: ₹{patientCase.authorization_status === 'APPROVED' && dec ? dec.patient_payable.toLocaleString('en-IN') : item.gross_amount.toLocaleString('en-IN')}
                     </span>
                   </div>
                 </div>

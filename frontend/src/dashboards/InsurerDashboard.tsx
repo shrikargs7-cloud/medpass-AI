@@ -91,7 +91,7 @@ export const InsurerDashboard: React.FC = () => {
     return 'PARTIAL_CLAIM';
   };
 
-  const loadData = async () => {
+  const loadData = async (refreshClaimId?: string) => {
     try {
       setLoading(true);
       const [claimsData, policiesData] = await Promise.all([
@@ -101,13 +101,15 @@ export const InsurerDashboard: React.FC = () => {
       setClaims(claimsData);
       setPolicies(policiesData);
 
-      if (claimsData.length > 0 && !selectedClaim) {
-        setSelectedClaim(claimsData[0]);
-        const cDetail = await fetchCaseDetail(claimsData[0].case_id);
+      const targetId = refreshClaimId || selectedClaim?.id;
+      const matchingClaim = claimsData.find((c) => c.id === targetId) || claimsData[0];
+      if (matchingClaim) {
+        setSelectedClaim(matchingClaim);
+        const cDetail = await fetchCaseDetail(matchingClaim.case_id);
         setCaseDetail(cDetail);
         setAckForm((prev) => ({
           ...prev,
-          approved_amount: claimsData[0].covered_amount || claimsData[0].total_claimed || 0
+          approved_amount: matchingClaim.covered_amount || matchingClaim.total_claimed || 0
         }));
       }
     } catch (err) {
@@ -146,7 +148,7 @@ export const InsurerDashboard: React.FC = () => {
     try {
       await approveClaim(selectedClaim.id, selectedClaim.total_claimed);
       notify(`Claim ${selectedClaim.external_reference || selectedClaim.id.slice(0, 8)} approved by Payer.`);
-      loadData();
+      await loadData(selectedClaim.id);
     } catch (err: any) {
       alert(err.message);
     }
@@ -159,7 +161,7 @@ export const InsurerDashboard: React.FC = () => {
     try {
       await rejectClaim(selectedClaim.id, reason);
       notify(`Claim rejected.`);
-      loadData();
+      await loadData(selectedClaim.id);
     } catch (err: any) {
       alert(err.message);
     }
@@ -172,7 +174,7 @@ export const InsurerDashboard: React.FC = () => {
       setQueryModal(false);
       setQueryText('');
       notify(`Query dispatched to hospital billing desk via NHCX.`);
-      loadData();
+      await loadData(selectedClaim.id);
     } catch (err: any) {
       alert(err.message);
     }
@@ -190,7 +192,7 @@ export const InsurerDashboard: React.FC = () => {
       });
       setAckModal(false);
       notify(`Payer Acknowledgement ${ackForm.ack_token} issued successfully!`);
-      loadData();
+      await loadData(selectedClaim.id);
     } catch (err: any) {
       alert(err.message);
     }
