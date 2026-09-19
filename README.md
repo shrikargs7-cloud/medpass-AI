@@ -1,121 +1,103 @@
-# MedPass AI
+# MedPass AI & Trace Commons
 
-[![CI Pipeline](https://github.com/medpass-ai/medpass-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/medpass-ai/medpass-platform/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Python 3.11+](https://img.shields.io/badge/Python-3.11+-brightgreen.svg)](https://python.org)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-teal.svg)](https://fastapi.tiangolo.com)
-[![React 19](https://img.shields.io/badge/React-19-61dafb.svg)](https://react.dev)
-[![DuckDB](https://img.shields.io/badge/DuckDB-Analytics-yellow.svg)](https://duckdb.org)
-[![Deploy on Render](https://img.shields.io/badge/Render-Deployed-purple.svg)](https://render.com)
-
-**MedPass AI + Trace Commons** is a full-stack, enterprise-grade healthcare insurance workflow and governed longitudinal data platform built for the **DSU DEVHACK**.
+**MedPass AI** is a modern healthcare workflow platform that automates insurance approvals, analyzes hospital discharge blockers, and creates anonymous medical datasets for researchers. It simplifies the complicated process of health insurance claims into a transparent, easy-to-use interface.
 
 ---
 
-## The Problem
-Hospitals and insurers face fragmented clinical documents, opaque policy rules, manual pre-authorization delays, hidden patient out-of-pocket costs, and blocked discharges. Simultaneously, critical workflow and clinical evidence remain trapped in operational silos, preventing privacy-compliant research and longitudinal analytics.
+## 🚀 Key Features
 
-## The Solution
-1. **MedPass AI (Operational Monolith)**:
-   - **Document Intelligence**: Extracts structured line items and clinical codes from uploaded invoices/discharge summaries using AI with deterministic fallbacks.
-   - **Deterministic Policy & Waterfall Calculation Engine**: Applies strict insurance rules (room rent caps, sub-limits, deductibles, co-pays) with explainable arithmetic—**no LLM makes financial or approval decisions**.
-   - **Case Readiness & Blocker Engine**: Calculates real-time readiness scores (0–100%) across 5 weighted categories and pinpoints blockers (missing documents, query pending, billing clearance).
-   - **Role-Based Portals**: Tailored interfaces for Hospital Administrators, Insurer/TPA Reviewers, Patients (clear, jargon-free breakdown), and Platform Admins.
-   - **AI Agent / Model Context Protocol (MCP)**: Native tools (`get_case`, `check_coverage`, `get_blockers`, `get_decision_evidence`, `query_trace_dataset`) for interactive assistance.
+1. **Smart Insurance Dashboards:**
+   - **For Hospitals:** Easily track active admissions, view real-time discharge blockers, and monitor the pre-authorization pipeline.
+   - **For Insurers:** A secure adjudication portal to review claims, automatically map billing codes, and instantly flag fraudulent or missing data.
+   - **For Patients:** A jargon-free view of their coverage, showing exactly what is covered and why.
 
-2. **Trace Commons (Governed Longitudinal Data Layer)**:
-   - **Transactional Event Outbox**: Captures canonical healthcare events (`CASE_CREATED`, `TREATMENT_ADDED`, `CLAIM_APPROVED`, etc.).
-   - **Multi-Layer Privacy Gate**: Deny-list filtration, age banding, month bucketing, facility anonymization, Presidio-compatible PII regex scanning, and small-cell suppression ($k \ge 5$).
-   - **DuckDB Cohort Explorer & Analytics**: Real-time querying across synthetic encounters, facilities, and conditions.
-   - **Complete Export Packaging**: One-click download of research bundles (`.zip`) containing **Apache Parquet**, **CSV**, **FHIR R4 NDJSON**, **OMOP CDM v5.5 tables**, metadata manifest, data dictionary, and SHA-256 checksums.
+2. **AI-Powered Medical Chatbot:**
+   - Ask our built-in assistant about cases, claim statuses, and policy details.
+   - It seamlessly reads clinical data and returns beautifully formatted, accurate answers (No AI hallucinations).
+
+3. **Trace Commons (Database Engine):**
+   - Strictly reserved for administrators, this engine converts live hospital data into 100% anonymous operational datasets.
+   - Generates research-ready ZIP bundles containing CSV and highly-compressed **Parquet** files that are fully compliant with the DPDP Act 2023.
 
 ---
 
-## Hackathon Track Implementations
+## 🛠 Tech Stack
 
-| Hackathon Track | Implementation Details | Evidence / Files |
-|---|---|---|
-| **1. GitHub Developer Track** | Clean git tree, conventional commits, branch protection guidelines, GitHub Actions CI/CD matrix, CODEOWNERS, issue/PR templates, unit & integration test coverage. | `.github/`, `CODEOWNERS`, `pytest` |
-| **2. Beeceptor Mocking Track** | Mock client & simulator for Insurer Preauthorization, NHCX Claim Submission, and FHIR endpoints with Success (202), Query (200), Rejection (200), Timeout, and 500 error scenarios. | `backend/app/integrations/beeceptor/` |
-| **3. Render Cloud Deployment Track** | Multi-service blueprint (`render.yaml`), containerized builds (`Dockerfile`), health check endpoints (`/health`, `/ready`), and auto-deploy workflow. | `render.yaml`, `Dockerfile` |
-| **4. n8n Automation Track** | Decoupled outbound webhook dispatcher firing on case lifecycle events (`CLAIM_SUBMITTED`, `STATUS_CHANGED`) + ready-to-import n8n operational workflow. | `data/n8n/`, `backend/app/integrations/n8n/` |
-| **5. Trace Commons Track** | Open data prototype: synthetic population generator (500+ encounters across 3 hospital tiers), data quality audits, lineage graphs, and DuckDB Parquet export. | `trace/`, `backend/app/services/cohort_service.py` |
+*   **Frontend:** React, TypeScript, Vite, Tailwind CSS, Google Sans (Plus Jakarta Sans).
+*   **Backend:** Python, FastAPI, SQLite/PostgreSQL, DuckDB, Pandas, PyArrow.
+*   **AI Integrations:** Google Gemini (for Document Parsing & Chatbot).
 
 ---
 
-## System Architecture
+## ⚙️ CI/CD Pipeline
 
-```
-                          ┌────────────────────────────────────────────────────────┐
-                          │         React + TypeScript + Tailwind + Lucide         │
-                          │   (Hospital, Insurer, Patient, Admin & Trace Portals)  │
-                          └───────────────────────────┬────────────────────────────┘
-                                                      │ REST API
-                                                      ▼
-┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
-│                                FastAPI Modular Backend Service                                   │
-├─────────────────────────────────────────┬────────────────────────────────────────────────────────┤
-│ MedPass AI Core:                        │ Trace Commons Data Layer:                              │
-│ • Document Intelligence (OCR/LLM)       │ • Transactional Event Outbox & Ingestion               │
-│ • Deterministic Policy Engine           │ • Privacy De-identification Gate (Presidio/Regex/Mask) │
-│ • Financial Waterfall Calculator        │ • Data Quality Rules Engine (Completeness/Integrity)   │
-│ • Case Readiness & Blocker Engine       │ • Dataset Catalog & Versioning (trace-core-v1.3.0)     │
-│ • Decision & Audit Evidence Engine      │ • DuckDB Cohort Query & Parquet/CSV/FHIR Export Engine │
-├─────────────────────────────────────────┴────────────────────────────────────────────────────────┤
-│ MCP & Integration Layer:                                                                         │
-│ • Model Context Protocol (MCP) Tools: get_case, check_coverage, get_blockers, query_trace...      │
-│ • External Beeceptor Adapters (Insurer Preauth, NHCX claims, FHIR adapter)                       │
-│ • Outbound n8n Webhook Dispatcher (Decoupled lifecycle triggers)                                 │
-└───────────────────────────┬──────────────────────────────────────────┬───────────────────────────┘
-                            ▼                                          ▼
-                PostgreSQL / SQLite DB                        DuckDB & Parquet Engine
-           (Operational `app` & `trace` schemas)               (Longitudinal Analytics)
-```
+This project includes a fully automated Continuous Integration & Continuous Deployment (CI/CD) pipeline via **GitHub Actions**.
+
+*   **Continuous Integration (CI):** On every push or pull request to the `main` branch, GitHub Actions automatically spins up an Ubuntu environment, installs all Node.js/Python dependencies, builds the Vite frontend, and validates the backend Python syntax.
+*   **Continuous Deployment (CD):** 
+    *   **Frontend:** Deploys instantly via **Vercel**. Any updates to the `main` branch trigger a live production build.
+    *   **Backend:** Deploys via cloud platforms (like Render or Railway) by binding to the `$PORT` environment variable.
+
+*(You can view the exact pipeline script in `.github/workflows/ci-cd.yml`)*
 
 ---
 
-## Quickstart & Local Setup
+## 🚀 How to Deploy
 
-### 1. Backend
+### 1. Deploying the Frontend (Vercel)
+1. Import this repository into Vercel.
+2. Set the **Framework Preset** to `Vite`.
+3. Set the **Root Directory** to `frontend`.
+4. Leave the Build Command as `npm run build` and Output Directory as `dist`.
+5. Under Environment Variables, paste the following (Ensure you update the API URL to your live backend):
+   ```env
+   VITE_API_URL=https://your-backend-url-goes-here.com
+   VITE_FIREBASE_API_KEY=your_key_here
+   VITE_FIREBASE_AUTH_DOMAIN=medpass-93fd7.firebaseapp.com
+   VITE_FIREBASE_PROJECT_ID=medpass-93fd7
+   VITE_FIREBASE_STORAGE_BUCKET=medpass-93fd7.firebasestorage.app
+   VITE_FIREBASE_MESSAGING_SENDER_ID=160228173971
+   VITE_FIREBASE_APP_ID=1:160228173971:web:678dfff4291e595774c566
+   VITE_FIREBASE_MEASUREMENT_ID=G-J6JRG584YE
+   ```
+
+### 2. Deploying the Backend
+1. Deploy the `backend/` folder to a service like Render or AWS.
+2. Set the following Environment Variables:
+   ```env
+   SECRET_KEY=medpass_production_secret_9942_!@#
+   CORS_ORIGINS=*
+   GEMINI_API_KEY=your_google_ai_key
+   ```
+3. The server will start automatically by binding to `0.0.0.0:$PORT`.
+
+---
+
+## 🖥 Local Setup (For Developers)
+
+**Backend Setup:**
 ```bash
-# Set up Python virtual environment
 cd backend
 python3 -m venv venv
 source venv/bin/activate
-
-# Install dependencies
 pip install -r requirements.txt
-
-# Run seed data script (seeds 5 golden cases + 500 trace encounters)
 python ../scripts/seed_demo.py
 python ../scripts/seed_trace.py
-
-# Run test suite
-pytest app/tests -v
-
-# Start FastAPI server
 uvicorn app.main:app --reload --port 8000
 ```
 
-### 2. Frontend
+**Frontend Setup:**
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
-Open [http://localhost:5173](http://localhost:5173) in your browser.
 
 ---
 
-## Golden Demo Cases Included
+## 🔄 Latest Updates (Current Release)
+- **UI & Typography Polish:** Replaced broken CDN fonts with Plus Jakarta Sans (Google Sans) for a crisp, enterprise-grade aesthetic.
+- **Dynamic Analytics Redesign:** Completely overhauled the Hospital Preauth Pipeline and Discharge Blocker infographics with live data, premium semantic colors, and smooth animations.
+- **Enhanced Data Exports:** Upgraded the Trace Commons engine to produce richly detailed, fully anonymized CSV and Parquet files for clinical/financial research.
+- **Chatbot Fixes:** Implemented exact word-boundary NLP matching to prevent patient name hallucinations during generic queries.
 
-1. **Case 1 (Clean Preauth)**: Full clinical documentation, in-network hospital, 100% readiness, approved within minutes.
-2. **Case 2 (Partial Coverage / Room Rent Cap)**: Room rent ₹7,500 exceeds policy cap of ₹5,000; strict deterministic waterfall calculates proportionate deductions and explains "Why?".
-3. **Case 3 (Missing Document / Blocker)**: Case blocked with 45% readiness due to missing Pre-Op ECG report; interactive resolution workflow.
-4. **Case 4 (Ambiguous Exclusion / Human Review)**: Pre-existing condition clause flagged for clinical review before payer submission.
-5. **Case 5 (Family Floater Coordination)**: Multi-member floater balance tracking across previous family admissions.
-
----
-
-## License
-Distributed under the MIT License. See `LICENSE` for more information.
