@@ -388,46 +388,6 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
   };
 
 
-  const handleAutofillCase = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files || !e.target.files[0]) return;
-    const file = e.target.files[0];
-    const formData = new FormData();
-    formData.append('file', file);
-    try {
-      // notify("Extracting document data with AI...");
-      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/cases/intake/extract`, {
-        method: 'POST',
-        body: formData
-      });
-      if (!res.ok) throw new Error("Failed to extract data");
-      const data = await res.json();
-      const extracted = data.extracted_data;
-      
-      setNewCaseForm(prev => ({
-        ...prev,
-        full_name: extracted.patient_name || prev.full_name,
-        dob: extracted.dob || prev.dob,
-        sex_at_birth: extracted.gender || prev.sex_at_birth,
-        policy_id: extracted.policy_number || prev.policy_id,
-        primary_diagnosis_code: extracted.diagnosis_code || prev.primary_diagnosis_code,
-        primary_diagnosis_name: extracted.diagnosis_name || prev.primary_diagnosis_name,
-      }));
-
-      if (extracted.line_items && extracted.line_items.length > 0) {
-        setTreatmentItems(extracted.line_items.map((it: any, idx: number) => ({
-          id: `item-${Date.now()}-${idx}`,
-          category: it.category || 'INVESTIGATION',
-          code: it.code || `ITEM-${idx}`,
-          description: it.description || '',
-          quantity: it.quantity || 1,
-          unit_amount: it.unit_amount || 0
-        })));
-      }
-      // notify("Autofill complete!");
-    } catch (err: any) {
-      alert("Autofill failed: " + err.message);
-    }
-  };
 
   const handleCreateCase = async (e: React.FormEvent) => {
 
