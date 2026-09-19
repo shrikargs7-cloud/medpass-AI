@@ -41,7 +41,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           
-      - name: Validate Backend Syntax
+      - name: Run Backend Tests
         working-directory: ./backend
+        env:
+          PYTHONPATH: .
         run: |
-          python -m compileall .
+          pytest -v
